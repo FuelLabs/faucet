@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>{{ page_title }}</title>
+        <script src="https://www.google.com/recaptcha/api.js"></script>
+        <script>
+            function give_me_coins(form) {
+                let address = form['address'].value;
+                let captcha = form['g-recaptcha-response'].value;
+                let xhr = new XMLHttpRequest();
+                xhr.open("POST", "/dispense");
+                xhr.setRequestHeader("Accept", "application/json");
+                xhr.setRequestHeader("Content-Type", "application/json");
+                xhr.onload = () => handle_response(JSON.parse(xhr.responseText));
+
+                let data = {
+                    address,
+                    captcha,
+                };
+                xhr.send(JSON.stringify(data));
+            }
+
+            function handle_response(response) {
+                document.getElementById("form").hidden = true;
+                document.getElementById("response").innerText = JSON.stringify(response);
+            }
+        </script>
+    </head>
+    <body>
+        <form action="javascript:" onsubmit="give_me_coins(this)" id="form">
+            <label for="address">Wallet Address
+                <input type="text" id="address" name="address" />
+            </label>
+            <div class="g-recaptcha" data-sitekey="6Ld3cEwfAAAAAMd4QTs7aO85LyKGdgj0bFsdBfre"></div>
+            <br/>
+            <input type="submit" value="Submit">
+        </form>
+        <div id="response">
+
+        </div>
+    </body>
+</html>
