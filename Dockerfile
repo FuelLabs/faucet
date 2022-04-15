@@ -11,9 +11,8 @@ RUN cargo build --release
 FROM ubuntu:20.04 as run
 
 # hadolint ignore=DL3008
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    curl \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
