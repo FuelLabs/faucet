@@ -39,7 +39,7 @@ pub async fn start_server(
     let secret = service_config
         .wallet_secret_key
         .clone()
-        .unwrap_or(Secret::new(WALLET_SECRET_DEV_KEY.to_string()));
+        .unwrap_or_else(|| Secret::new(WALLET_SECRET_DEV_KEY.to_string()));
     let wallet = Wallet::new_from_private_key(
         secret
             .expose_secret()

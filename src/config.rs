@@ -28,7 +28,7 @@ impl Default for Config {
                 .unwrap_or(DEFAULT_PORT),
             captcha_secret: env::var_os(CAPTCHA_SECRET)
                 .map(|s| Secret::new(s.into_string().unwrap())),
-            node_url: env::var(FUEL_NODE_URL).unwrap_or(DEFAULT_NODE_URL.to_string()),
+            node_url: env::var(FUEL_NODE_URL).unwrap_or_else(|_| DEFAULT_NODE_URL.to_string()),
             wallet_secret_key: env::var_os(WALLET_SECRET_KEY)
                 .map(|s| Secret::new(s.into_string().unwrap())),
             fuel_dispense_amount: FAUCET_DISPENSE_AMOUNT,
@@ -40,13 +40,12 @@ impl Default for Config {
 fn parse_bool(env_var: &str, default: bool) -> bool {
     env::var_os(env_var)
         .map(|s| {
-            s.to_str().unwrap().parse().expect(
-                format!(
+            s.to_str().unwrap().parse().unwrap_or_else(|_| {
+                panic!(
                     "Expected `true` or `false` to be provided for `{}`",
                     env_var
                 )
-                .as_str(),
-            )
+            })
         })
         .unwrap_or(default)
 }
