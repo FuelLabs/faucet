@@ -83,6 +83,9 @@ jobs:
           command: test
           args: --verbose --all --all-features
 
+  build-and-publish-image:
+
+
   publish:
     # Only do this job if publishing a release
     needs:

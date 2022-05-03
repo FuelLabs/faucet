@@ -1,0 +1,16 @@
+# Default values for fuel faucet
+
+app:
+  name: fuel-faucet
+  replicas: 1
+  httpport: 80
+  httpsport: 443
+  targetport: 3000
+  human_logging: ${fuel_faucet_human_logging}
+  wallet_secret_key: ${fuel_faucet_wallet_secret_key}
+  captcha_secret: ${fuel_faucet_captcha_secret}
+  node_url: ${fuel_faucet_node_url}
+  image:
+    repository: ${fuel_faucet_image_repository}
+    tag: ${fuel_faucet_image_tag}
+    pullPolicy: Always

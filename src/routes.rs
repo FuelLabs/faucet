@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::str::FromStr;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 lazy_static::lazy_static! {
     static ref PAGE: String = {
@@ -21,10 +22,20 @@ lazy_static::lazy_static! {
         data.insert("page_title", "test");
         handlebars.render("index", &data).unwrap()
     };
+
+    static ref START_TIME: u64 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
 }
 
 pub async fn main() -> Html<&'static str> {
     Html(&PAGE)
+}
+
+pub async fn health() -> Json<serde_json::Value> {
+    let time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    Json(json!({ "up": true, "uptime": time - *START_TIME }))
 }
 
 #[derive(Deserialize, Debug)]
