@@ -13,9 +13,9 @@ spec:
     app: {{ template "fuel-faucet.name" . }}
   ports:
     - name: http
-      port: {{ .Values.app.httpport }}
+      port: {{ .Values.app.http_port }}
       protocol: TCP
-      targetPort: {{ .Values.app.targetport }}
+      targetPort: {{ .Values.app.target_port }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -46,12 +46,12 @@ spec:
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: {{ .Values.app.targetport }}
+              containerPort: {{ .Values.app.target_port }}
               protocol: TCP
           livenessProbe:
             httpGet:
               path: /health
-              port: {{ .Values.app.targetport }}
+              port: {{ .Values.app.target_port }}
             initialDelaySeconds: 10
             periodSeconds: 5
             timeoutSeconds: 10
@@ -59,7 +59,7 @@ spec:
             - name: HUMAN_LOGGING
               value: {{ .Values.app.human_logging | quote }}
             - name: PORT
-              value: {{ .Values.app.targetport }}
+              value: {{ .Values.app.target_port }}
             - name: WALLET_SECRET_KEY
               value: {{ .Values.app.wallet_secret_key | quote }}
             - name: CAPTCHA_SECRET
