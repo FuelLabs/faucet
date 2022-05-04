@@ -57,7 +57,7 @@ spec:
             timeoutSeconds: 10
           env:
             - name: HUMAN_LOGGING
-              value: '{{ .Values.app.human_logging }}'
+              value: {{ quote .Values.app.human_logging }}
             - name: PORT
               value: {{ .Values.app.target_port }}
             - name: WALLET_SECRET_KEY
