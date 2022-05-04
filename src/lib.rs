@@ -1,20 +1,28 @@
+use crate::constants::{MAX_CONCURRENT_REQUESTS, MAX_DISPENSES_PER_MINUTE};
 use crate::routes::health;
 use crate::{config::Config, constants::WALLET_SECRET_DEV_KEY};
 use anyhow::anyhow;
+use axum::error_handling::HandleErrorLayer;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use axum::{
     http::header::CACHE_CONTROL,
     http::HeaderValue,
     routing::{get, post},
-    Extension, Router,
+    BoxError, Extension, Json, Router,
 };
 use fuel_gql_client::client::FuelClient;
 use fuels_signers::{provider::Provider, wallet::Wallet};
 use secrecy::{ExposeSecret, Secret};
+use serde_json::json;
+use std::time::Duration;
 use std::{net::SocketAddr, net::TcpListener, sync::Arc};
 use tokio::task::JoinHandle;
+use tower::ServiceBuilder;
 use tower_http::{
     cors::{Any, CorsLayer},
     set_header::SetResponseHeaderLayer,
+    trace::TraceLayer,
 };
 use tracing::info;
 use tracing_subscriber::filter::EnvFilter;
@@ -61,10 +69,30 @@ pub async fn start_server(
             )),
         )
         .route("/health", get(health))
-        .route("/dispense", post(routes::dispense_tokens))
-        .layer(Extension(Arc::new(wallet)))
-        .layer(Extension(Arc::new(service_config.clone())))
-        .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any));
+        .route(
+            "/dispense",
+            post(routes::dispense_tokens).route_layer(
+                // apply rate limiting specifically on the dispense endpoint
+                ServiceBuilder::new()
+                    .layer(HandleErrorLayer::new(handle_error))
+                    .buffer(MAX_CONCURRENT_REQUESTS)
+                    .rate_limit(MAX_DISPENSES_PER_MINUTE, Duration::from_secs(60))
+                    .into_inner(),
+            ),
+        )
+        .layer(
+            ServiceBuilder::new()
+                // Handle errors from middleware
+                .layer(HandleErrorLayer::new(handle_error))
+                .load_shed()
+                .concurrency_limit(MAX_CONCURRENT_REQUESTS)
+                .timeout(Duration::from_secs(10))
+                .layer(TraceLayer::new_for_http())
+                .layer(Extension(Arc::new(wallet)))
+                .layer(Extension(Arc::new(service_config.clone())))
+                .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any))
+                .into_inner(),
+        );
 
     // run the server
     let addr = SocketAddr::from(([0, 0, 0, 0], service_config.service_port));
@@ -106,4 +134,31 @@ fn init_logger(config: &Config) {
             .json()
             .init();
     }
+}
+
+async fn handle_error(error: BoxError) -> impl IntoResponse {
+    if error.is::<tower::timeout::error::Elapsed>() {
+        return (
+            StatusCode::REQUEST_TIMEOUT,
+            Json(json!({
+                "error": "request timed out"
+            })),
+        );
+    }
+
+    if error.is::<tower::load_shed::error::Overloaded>() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({
+                "error": "service is overloaded, try again later"
+            })),
+        );
+    }
+
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(json!({
+            "error": format!("Unhandled internal error: {}", error)
+        })),
+    )
 }

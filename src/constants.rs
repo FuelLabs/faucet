@@ -12,3 +12,13 @@ pub const FAUCET_DISPENSE_AMOUNT: u64 = 10_000_000;
 pub const FAUCET_ASSET_ID: AssetId = AssetId::new([0; 32]);
 pub const SERVICE_PORT: &str = "PORT";
 pub const DEFAULT_PORT: u16 = 3000;
+
+// HTTP config
+
+/// The max number of simultaneous requests that can be buffered until backpressure is applied
+pub const MAX_CONCURRENT_REQUESTS: usize = 1024usize;
+/// The max number of requests that can be applied in a given timeframe
+///
+/// 20 dispenses / minute would take 10 years to exhaust the faucet with 1<<50 coins
+/// and dispense amount of 10mm tokens.
+pub const MAX_DISPENSES_PER_MINUTE: u64 = 20u64;
