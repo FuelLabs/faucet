@@ -57,12 +57,12 @@ spec:
             timeoutSeconds: 10
           env:
             - name: HUMAN_LOGGING
-              value: !!booleanEnv {{ .Values.app.human_logging }}
+              value: {{ .Values.app.human_logging | quote}}
             - name: PORT
-              value: {{ .Values.app.target_port }}
+              value: {{ .Values.app.target_port | quote}}
             - name: WALLET_SECRET_KEY
-              value: {{ .Values.app.wallet_secret_key }}
+              value: {{ .Values.app.wallet_secret_key | quote}}
             - name: CAPTCHA_SECRET
-              value: {{ .Values.app.captcha_secret }}
+              value: {{ .Values.app.captcha_secret | quote}}
             - name: FUEL_NODE_URL
-              value: {{ .Values.app.node_url }}
+              value: {{ .Values.app.node_url | quote}}
