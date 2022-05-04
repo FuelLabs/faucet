@@ -5,6 +5,7 @@ on:
     branches:
       - master
   pull_request:
+  workflow_dispatch:
   release:
     types: [published]
 
@@ -84,18 +85,13 @@ jobs:
           args: --verbose --all --all-features
 
   build-and-publish-image:
-
-
-  publish:
-    # Only do this job if publishing a release
     needs:
       - cargo-fmt-check
       - cargo-clippy
       - cargo-check
       - cargo-test
-    if: github.event_name == 'release' && github.event.action == 'published'
+    if: (github.event_name == 'release' && github.event.action == 'published') || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -107,6 +103,7 @@ jobs:
           images: |
             ghcr.io/fuellabs/faucet
           tags: |
+            type=sha
             type=semver,pattern={{raw}}
 
       - name: Set up Docker Buildx
@@ -123,7 +120,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: .
-          file: Dockerfile
+          file: deployment/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
