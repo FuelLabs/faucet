@@ -5,7 +5,6 @@ on:
     branches:
       - master
   pull_request:
-  workflow_dispatch:
   release:
     types: [published]
 
@@ -90,11 +89,21 @@ jobs:
       - cargo-clippy
       - cargo-check
       - cargo-test
-    if: (github.event_name == 'release' && github.event.action == 'published') || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'release' && github.event.action == 'published') || github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
+
+      # enable docker layer caching for non-release builds
+      - name: Cache Docker layers
+        uses: actions/cache@v2
+        with:
+          path: /tmp/.buildx-cache
+          # Key is named differently to avoid collision
+          key: ${{ runner.os }}-multi-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-multi-buildx
 
       - name: Docker meta
         id: meta
