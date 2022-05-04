@@ -21,6 +21,7 @@ The faucet makes use of environment variables for configuration.
 ## Build and Run
 
 To run locally, assuming environment variables have already been set:
-```shell
+
+```sh
 cargo run
 ```
