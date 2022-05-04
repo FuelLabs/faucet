@@ -55,7 +55,7 @@ async fn dispense_sends_coins_to_valid_address() {
     // start faucet
     let faucet_config = Config {
         service_port: 0,
-        node_url: format!("http://{}", fuel_node.bound_address.to_string()),
+        node_url: format!("http://{}", fuel_node.bound_address),
         wallet_secret_key: Some(Secret::new(format!(
             "{:x}",
             SecretKey::from_slice(&faucet_wallet_key_raw).unwrap()
