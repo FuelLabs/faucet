@@ -7,6 +7,7 @@ use axum::{
     routing::{get, post},
     Extension, Router,
 };
+use fuel_gql_client::client::FuelClient;
 use fuels_signers::{provider::Provider, wallet::Wallet};
 use secrecy::{ExposeSecret, Secret};
 use std::{net::SocketAddr, net::TcpListener, sync::Arc};
@@ -33,9 +34,9 @@ pub async fn start_server(
     tracing::info!("{:#?}", &service_config);
 
     // connect to the fuel node
-    let provider = Provider::connect(service_config.node_url.clone().parse().unwrap())
-        .await
-        .unwrap();
+    let client = FuelClient::new(service_config.node_url.clone())
+        .expect("unable to connect to the fuel node api");
+    let provider = Provider::new(client);
     // setup wallet
     let secret = service_config
         .wallet_secret_key
