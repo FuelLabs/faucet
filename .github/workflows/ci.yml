@@ -131,7 +131,7 @@ jobs:
           images: |
             ghcr.io/fuellabs/faucet
           tags: |
-            type=ref
+            type=ref,event=branch
             type=sha,format=long,prefix=
             type=semver,pattern={{raw}}
 
