@@ -59,7 +59,7 @@ spec:
             - name: HUMAN_LOGGING
               value: {{ .Values.app.human_logging | quote}}
             - name: PORT
-              value: {{ .Values.app.target_port | quote}}
+              value: {{ .Values.app.target_port }}
             - name: WALLET_SECRET_KEY
               value: {{ .Values.app.wallet_secret_key | quote}}
             - name: CAPTCHA_SECRET
