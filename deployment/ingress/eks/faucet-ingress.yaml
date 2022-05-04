@@ -1,8 +1,8 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: ${k8s_faucet_namespace}-ingress
-  namespace: ${k8s_faucet_namespace}
+  name: ${k8s_namespace}-faucet-ingress
+  namespace: ${k8s_namespace}
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
