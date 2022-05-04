@@ -1,0 +1,68 @@
+kind: Service
+apiVersion: v1
+metadata:
+  labels:
+    app: {{ template "fuel-faucet.name" . }}
+    chart: {{ template "fuel-faucet.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  name: {{ template "fuel-faucet.name" . }}-service
+spec:
+  type: NodePort
+  selector:
+    app: {{ template "fuel-faucet.name" . }}
+  ports:
+    - name: http
+      port: {{ .Values.app.http_port }}
+      protocol: TCP
+      targetPort: {{ .Values.app.target_port }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "fuel-faucet.name" . }}-k8s
+  labels:
+    app: {{ template "fuel-faucet.name" . }}
+    chart: {{ template "fuel-faucet.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "fuel-faucet.name" . }}
+      release: {{ .Release.Name }}
+  replicas: {{ .Values.app.replicas }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "fuel-faucet.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: {{ .Values.app.name }}
+          image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
+          command: ["./fuel-faucet"]
+          resources: {}
+          imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.app.target_port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.app.target_port }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 10
+          env:
+            - name: HUMAN_LOGGING
+              value: {{ .Values.app.human_logging | quote }}
+            - name: PORT
+              value: {{ .Values.app.target_port }}
+            - name: WALLET_SECRET_KEY
+              value: {{ .Values.app.wallet_secret_key | quote }}
+            - name: CAPTCHA_SECRET
+              value: {{ .Values.app.captcha_secret | quote }}
+            - name: FUEL_NODE_URL
+              value: {{ .Values.app.node_url | quote }}

@@ -1,3 +1,4 @@
+use crate::routes::health;
 use crate::{config::Config, constants::WALLET_SECRET_DEV_KEY};
 use anyhow::anyhow;
 use axum::{
@@ -58,6 +59,7 @@ pub async fn start_server(
                 HeaderValue::from_static("public, max-age=3600, immutable"),
             )),
         )
+        .route("/health", get(health))
         .route("/dispense", post(routes::dispense_tokens))
         .layer(Extension(Arc::new(wallet)))
         .layer(Extension(Arc::new(service_config.clone())))

@@ -83,19 +83,27 @@ jobs:
           command: test
           args: --verbose --all --all-features
 
-  publish:
-    # Only do this job if publishing a release
+  build-and-publish-image:
     needs:
       - cargo-fmt-check
       - cargo-clippy
       - cargo-check
       - cargo-test
-    if: github.event_name == 'release' && github.event.action == 'published'
+    if: (github.event_name == 'release' && github.event.action == 'published') || github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
+
+      # enable docker layer caching for non-release builds
+      - name: Cache Docker layers
+        uses: actions/cache@v2
+        with:
+          path: /tmp/.buildx-cache
+          # Key is named differently to avoid collision
+          key: ${{ runner.os }}-multi-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-multi-buildx
 
       - name: Docker meta
         id: meta
@@ -104,6 +112,7 @@ jobs:
           images: |
             ghcr.io/fuellabs/faucet
           tags: |
+            type=sha
             type=semver,pattern={{raw}}
 
       - name: Set up Docker Buildx
@@ -120,7 +129,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: .
-          file: Dockerfile
+          file: deployment/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
