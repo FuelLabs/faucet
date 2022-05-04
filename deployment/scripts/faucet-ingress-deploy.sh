@@ -8,10 +8,10 @@ if [ "${k8s_provider}" == "eks" ]; then
     aws eks update-kubeconfig --name ${TF_VAR_eks_cluster_name}
     cd ../ingress/${k8s_provider}
     echo "Deploying fuel-faucet ingress to ${TF_VAR_eks_cluster_name} ...."
-    mv fuel-faucet-ingress.yaml fuel-faucet-ingress.template
-    envsubst < fuel-faucet-ingress.template > fuel-faucet-ingress.yaml
-    rm fuel-faucet-ingress.template
-    kubectl apply -f fuel-faucet-ingress.yaml
+    mv faucet-ingress.yaml faucet-ingress.template
+    envsubst < faucet-ingress.template > faucet-ingress.yaml
+    rm faucet-ingress.template
+    kubectl apply -f faucet-ingress.yaml
 else
    echo "You have inputted a non-supported kubernetes provider in your .env"
 fi
