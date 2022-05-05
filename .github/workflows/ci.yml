@@ -132,7 +132,7 @@ jobs:
             ghcr.io/fuellabs/faucet
           tags: |
             type=ref,event=branch
-            type=sha,format=long,prefix=
+            type=sha,prefix=
             type=semver,pattern={{raw}}
 
       - name: Set up Docker Buildx
