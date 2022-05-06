@@ -1,13 +1,13 @@
-use crate::constants::MAX_CONCURRENT_REQUESTS;
-use crate::routes::health;
-use crate::{config::Config, constants::WALLET_SECRET_DEV_KEY};
+use crate::{
+    config::Config,
+    constants::{MAX_CONCURRENT_REQUESTS, WALLET_SECRET_DEV_KEY},
+    routes::health,
+};
 use anyhow::anyhow;
-use axum::error_handling::HandleErrorLayer;
-use axum::http::StatusCode;
-use axum::response::IntoResponse;
 use axum::{
-    http::header::CACHE_CONTROL,
-    http::HeaderValue,
+    error_handling::HandleErrorLayer,
+    http::{header::CACHE_CONTROL, HeaderValue, StatusCode},
+    response::IntoResponse,
     routing::{get, post},
     BoxError, Extension, Json, Router,
 };
@@ -15,8 +15,11 @@ use fuel_gql_client::client::FuelClient;
 use fuels_signers::{provider::Provider, wallet::Wallet};
 use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
-use std::time::Duration;
-use std::{net::SocketAddr, net::TcpListener, sync::Arc};
+use std::{
+    net::{SocketAddr, TcpListener},
+    sync::Arc,
+    time::Duration,
+};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -28,6 +31,7 @@ use tracing::info;
 use tracing_subscriber::filter::EnvFilter;
 
 pub mod config;
+
 mod constants;
 mod recaptcha;
 mod routes;

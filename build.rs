@@ -1,6 +1,5 @@
 use minify_html::Cfg;
-use std::path::Path;
-use std::{env, fs};
+use std::{env, fs, path::Path};
 
 fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();

@@ -1,15 +1,19 @@
 use crate::{recaptcha, SharedConfig, SharedWallet};
-use axum::response::{Html, IntoResponse, Response};
-use axum::{Extension, Json};
+use axum::{
+    response::{Html, IntoResponse, Response},
+    Extension, Json,
+};
 use fuel_types::Address;
 use handlebars::Handlebars;
 use reqwest::StatusCode;
 use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::BTreeMap;
-use std::str::FromStr;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    collections::BTreeMap,
+    str::FromStr,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 lazy_static::lazy_static! {
     static ref PAGE: String = {
