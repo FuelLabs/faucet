@@ -57,14 +57,18 @@ spec:
             timeoutSeconds: 10
           env:
             - name: HUMAN_LOGGING
-              value: "{{ .Values.app.human_logging }}"
+              value: "{{ .Values.app.human_logging | default false }}"
             - name: PORT
               value: "{{ .Values.app.target_port }}"
             - name: WALLET_SECRET_KEY
               value: "{{ .Values.app.wallet_secret_key }}"
+          {{- if .Values.app.captcha_secret }}
             - name: CAPTCHA_SECRET
               value: "{{ .Values.app.captcha_secret }}"
+          {{- end }}
             - name: FUEL_NODE_URL
               value: "{{ .Values.app.node_url }}"
+          {{- if .Values.app.max_dispenses_per_minute }}
             - name: MAX_DISPENSES_PER_MINUTE
               value: "{{ .Values.app.max_dispenses_per_minute }}"
+          {{- end }}
