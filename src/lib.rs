@@ -97,7 +97,12 @@ pub async fn start_server(
                 .layer(TraceLayer::new_for_http())
                 .layer(Extension(Arc::new(wallet)))
                 .layer(Extension(Arc::new(service_config.clone())))
-                .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any))
+                .layer(
+                    CorsLayer::new()
+                        .allow_origin(Any)
+                        .allow_methods(Any)
+                        .allow_headers(Any),
+                )
                 .into_inner(),
         );
 
