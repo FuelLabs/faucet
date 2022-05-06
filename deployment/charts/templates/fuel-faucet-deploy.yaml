@@ -66,3 +66,5 @@ spec:
               value: "{{ .Values.app.captcha_secret }}"
             - name: FUEL_NODE_URL
               value: "{{ .Values.app.node_url }}"
+            - name: MAX_DISPENSES_PER_MINUTE
+              value: "{{ .Values.app.max_dispenses_per_minute }}"

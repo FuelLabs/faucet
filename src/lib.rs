@@ -1,4 +1,4 @@
-use crate::constants::{MAX_CONCURRENT_REQUESTS, MAX_DISPENSES_PER_MINUTE};
+use crate::constants::MAX_CONCURRENT_REQUESTS;
 use crate::routes::health;
 use crate::{config::Config, constants::WALLET_SECRET_DEV_KEY};
 use anyhow::anyhow;
@@ -76,7 +76,10 @@ pub async fn start_server(
                 ServiceBuilder::new()
                     .layer(HandleErrorLayer::new(handle_error))
                     .buffer(MAX_CONCURRENT_REQUESTS)
-                    .rate_limit(MAX_DISPENSES_PER_MINUTE, Duration::from_secs(60))
+                    .rate_limit(
+                        service_config.max_dispenses_per_minute,
+                        Duration::from_secs(60),
+                    )
                     .into_inner(),
             ),
         )

@@ -1,6 +1,7 @@
 use crate::constants::{
-    CAPTCHA_SECRET, DEFAULT_NODE_URL, DEFAULT_PORT, FAUCET_ASSET_ID, FAUCET_DISPENSE_AMOUNT,
-    FUEL_NODE_URL, HUMAN_LOGGING, LOG_FILTER, SERVICE_PORT, WALLET_SECRET_KEY,
+    CAPTCHA_SECRET, DEFAULT_MAX_DISPENSES_PER_MINUTE, DEFAULT_NODE_URL, DEFAULT_PORT,
+    FAUCET_ASSET_ID, FAUCET_DISPENSE_AMOUNT, FUEL_NODE_URL, HUMAN_LOGGING, LOG_FILTER,
+    MAX_DISPENSES_PER_MINUTE, SERVICE_PORT, WALLET_SECRET_KEY,
 };
 use fuel_types::AssetId;
 use secrecy::Secret;
@@ -16,6 +17,7 @@ pub struct Config {
     pub wallet_secret_key: Option<Secret<String>>,
     pub fuel_dispense_amount: u64,
     pub dispense_asset_id: AssetId,
+    pub max_dispenses_per_minute: u64,
 }
 
 impl Default for Config {
@@ -33,6 +35,10 @@ impl Default for Config {
                 .map(|s| Secret::new(s.into_string().unwrap())),
             fuel_dispense_amount: FAUCET_DISPENSE_AMOUNT,
             dispense_asset_id: FAUCET_ASSET_ID,
+            max_dispenses_per_minute: env::var(MAX_DISPENSES_PER_MINUTE)
+                .unwrap_or_else(|_| DEFAULT_MAX_DISPENSES_PER_MINUTE.to_string())
+                .parse::<u64>()
+                .expect("expected a valid integer for MAX_DISPENSES_PER_MINUTE"),
         }
     }
 }
