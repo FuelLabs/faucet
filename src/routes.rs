@@ -23,7 +23,7 @@ lazy_static::lazy_static! {
         let mut handlebars = Handlebars::new();
         handlebars.register_template_string("index", template).unwrap();
         let mut data = BTreeMap::new();
-        data.insert("page_title", "test");
+        data.insert("page_title", "Fuel Faucet");
         handlebars.render("index", &data).unwrap()
     };
 
