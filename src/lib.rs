@@ -13,6 +13,7 @@ use axum::{
 };
 use fuel_gql_client::client::FuelClient;
 use fuels_signers::{provider::Provider, wallet::Wallet};
+use reqwest::header::CONTENT_TYPE;
 use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
 use std::time::Duration;
@@ -90,7 +91,12 @@ pub async fn start_server(
                 .layer(TraceLayer::new_for_http())
                 .layer(Extension(Arc::new(wallet)))
                 .layer(Extension(Arc::new(service_config.clone())))
-                .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any))
+                .layer(
+                    CorsLayer::new()
+                        .allow_origin(Any)
+                        .allow_methods(Any)
+                        .allow_headers(vec![CONTENT_TYPE]),
+                )
                 .into_inner(),
         );
 
