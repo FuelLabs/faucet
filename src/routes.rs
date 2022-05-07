@@ -52,7 +52,7 @@ pub struct DispenseInput {
 #[derive(Serialize, Debug)]
 pub struct DispenseResponse {
     status: String,
-    tokens: Option<u64>,
+    tokens: u64,
 }
 
 impl IntoResponse for DispenseResponse {
@@ -127,6 +127,6 @@ pub async fn dispense_tokens(
 
     Ok(DispenseResponse {
         status: "Success".to_string(),
-        tokens: None,
+        tokens: config.fuel_dispense_amount,
     })
 }
