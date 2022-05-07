@@ -14,6 +14,7 @@ use std::{
     str::FromStr,
     time::{SystemTime, UNIX_EPOCH},
 };
+use tracing::{error, info};
 
 lazy_static::lazy_static! {
     static ref PAGE: String = {
@@ -112,12 +113,17 @@ pub async fn dispense_tokens(
         )
         .await
         .map_err(|e| {
-            tracing::error!("failed to transfer: {}", e);
+            error!("failed to transfer: {}", e);
             DispenseError {
                 error: "Failed to transfer".to_string(),
                 status: StatusCode::INTERNAL_SERVER_ERROR,
             }
         })?;
+
+    info!(
+        "dispensed {} tokens to {:#x}",
+        config.fuel_dispense_amount, &address
+    );
 
     Ok(DispenseResponse {
         status: "Success".to_string(),

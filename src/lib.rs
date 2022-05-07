@@ -11,8 +11,10 @@ use axum::{
     routing::{get, post},
     BoxError, Extension, Json, Router,
 };
+use fuel_gql_client::client::schema::coin::CoinStatus;
 use fuel_gql_client::client::FuelClient;
-use fuels_signers::{provider::Provider, wallet::Wallet};
+use fuel_types::AssetId;
+use fuels_signers::{provider::Provider, wallet::Wallet, Signer};
 use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
 use std::{
@@ -62,6 +64,24 @@ pub async fn start_server(
         provider,
     )
     .unwrap();
+
+    let balance = wallet
+        .get_coins()
+        .await
+        .expect("Failed to fetch initial balance from fuel core")
+        .into_iter()
+        .filter_map(|coin| {
+            let coin_asset: AssetId = coin.asset_id.into();
+            if coin.status == CoinStatus::Unspent && coin_asset == service_config.dispense_asset_id
+            {
+                Some(coin.amount.0)
+            } else {
+                None
+            }
+        })
+        .sum::<u64>();
+    info!("Faucet Account: {:#x}", &wallet.address());
+    info!("Initial Balance: {}", balance);
 
     // setup routes
     let app = Router::new()
