@@ -24,4 +24,4 @@ spec:
   tls:
     - hosts:
         - ${fuel_faucet_ingress_dns}
-      secretName: faucet-prod
+      secretName: ${fuel_faucet_dns_secret}
