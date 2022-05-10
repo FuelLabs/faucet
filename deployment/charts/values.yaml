@@ -11,6 +11,8 @@ app:
   captcha_secret: ${fuel_faucet_captcha_secret}
   node_url: ${fuel_faucet_node_url}
   max_dispenses_per_minute: ${fuel_faucet_max_dispenses_per_minute}
+  min_gas_price: ${fuel_faucet_min_gas_price}
+  min_byte_price: ${fuel_faucet_min_byte_price}
   image:
     repository: ${fuel_faucet_image_repository}
     tag: ${fuel_faucet_image_tag}
