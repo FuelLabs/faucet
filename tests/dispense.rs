@@ -19,7 +19,7 @@ async fn dispense_sends_coins_to_valid_address() {
     let recipient_address: Address = rng.gen();
     let secret_key: SecretKey = rng.gen();
     let wallet = Wallet::new_from_private_key(
-        secret_key.clone(),
+        secret_key,
         Provider::connect(SocketAddr::from(([0, 0, 0, 0], 0)))
             .await
             .unwrap(),
