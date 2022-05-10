@@ -15,7 +15,8 @@ anyhow = "1.0"
 axum = "0.5"
 fuel-gql-client = "0.6"
 fuel-types = "0.3"
-fuels-signers = "0.10.1"
+fuels-signers = "0.12.0"
+fuels-core = "0.12.0"
 handlebars = "4.2"
 lazy_static = "1.4"
 reqwest = { version = "0.11", features = ["json", "rustls-tls-webpki-roots"], default-features = false }
@@ -24,16 +25,16 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 tokio = { version = "1.0", features = ["full"] }
 tower = { version = "0.4", features = ["buffer", "limit", "load-shed", "util", "timeout"] }
-tower-http = { version = "0.2.5", features = ["cors"] }
+tower-http = { version = "0.2.5", features = ["cors", "tracing", "set-header"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 [dev-dependencies]
 fuel-core = { version = "0.6", default-features = false }
+fuel-crypto = "0.4"
 fuel-types = { version = "0.3", features = ["random"] }
 insta = "1.14"
 rand = "0.8"
-secp256k1 = "0.20"
 
 [build-dependencies]
 minify-html = "0.8"

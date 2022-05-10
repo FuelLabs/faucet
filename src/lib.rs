@@ -62,8 +62,7 @@ pub async fn start_server(
             .parse()
             .expect("Unable to load secret key"),
         provider,
-    )
-    .unwrap();
+    );
 
     let balance = wallet
         .get_coins()
@@ -81,7 +80,7 @@ pub async fn start_server(
         })
         .sum::<u64>();
     info!("Faucet Account: {:#x}", &wallet.address());
-    info!("Initial Balance: {}", balance);
+    info!("Faucet Balance: {}", balance);
 
     // setup routes
     let app = Router::new()

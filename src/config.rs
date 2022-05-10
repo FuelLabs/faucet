@@ -1,7 +1,7 @@
 use crate::constants::{
     CAPTCHA_SECRET, DEFAULT_MAX_DISPENSES_PER_MINUTE, DEFAULT_NODE_URL, DEFAULT_PORT,
     FAUCET_ASSET_ID, FAUCET_DISPENSE_AMOUNT, FUEL_NODE_URL, HUMAN_LOGGING, LOG_FILTER,
-    MAX_DISPENSES_PER_MINUTE, SERVICE_PORT, WALLET_SECRET_KEY,
+    MAX_DISPENSES_PER_MINUTE, MIN_BYTE_PRICE, MIN_GAS_PRICE, SERVICE_PORT, WALLET_SECRET_KEY,
 };
 use fuel_types::AssetId;
 use secrecy::Secret;
@@ -18,6 +18,8 @@ pub struct Config {
     pub fuel_dispense_amount: u64,
     pub dispense_asset_id: AssetId,
     pub max_dispenses_per_minute: u64,
+    pub min_gas_price: u64,
+    pub min_byte_price: u64,
 }
 
 impl Default for Config {
@@ -39,6 +41,14 @@ impl Default for Config {
                 .unwrap_or_else(|_| DEFAULT_MAX_DISPENSES_PER_MINUTE.to_string())
                 .parse::<u64>()
                 .expect("expected a valid integer for MAX_DISPENSES_PER_MINUTE"),
+            min_gas_price: env::var(MIN_GAS_PRICE)
+                .unwrap_or_else(|_| "0".to_string())
+                .parse::<u64>()
+                .expect("expected a valid integer for MIN_GAS_PRICE"),
+            min_byte_price: env::var(MIN_BYTE_PRICE)
+                .unwrap_or_else(|_| "0".to_string())
+                .parse::<u64>()
+                .expect("expected a valid integer for MIN_BYTE_PRICE"),
         }
     }
 }
