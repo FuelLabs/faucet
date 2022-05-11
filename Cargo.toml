@@ -32,6 +32,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 [dev-dependencies]
 fuel-core = { version = "0.6", default-features = false }
 fuel-crypto = "0.4"
+fuel-txpool = "0.6"
 fuel-types = { version = "0.3", features = ["random"] }
 insta = "1.14"
 rand = "0.8"

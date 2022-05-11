@@ -43,6 +43,11 @@ async fn dispense_sends_coins_to_valid_address() {
             }),
             ..ChainConfig::local_testnet()
         },
+        tx_pool_config: fuel_txpool::Config {
+            min_gas_price: 1,
+            min_byte_price: 1,
+            ..Default::default()
+        },
         ..NodeConfig::local_node()
     })
     .await
@@ -57,6 +62,8 @@ async fn dispense_sends_coins_to_valid_address() {
         node_url: format!("http://{}", fuel_node.bound_address),
         wallet_secret_key: Some(Secret::new(format!("{:x}", secret_key))),
         dispense_asset_id: AssetId::default(),
+        min_gas_price: 1,
+        min_byte_price: 1,
         ..Default::default()
     };
     let (addr, _) = start_server(faucet_config.clone()).await;
