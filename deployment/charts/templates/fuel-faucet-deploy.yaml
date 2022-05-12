@@ -72,3 +72,11 @@ spec:
             - name: MAX_DISPENSES_PER_MINUTE
               value: "{{ .Values.app.max_dispenses_per_minute }}"
           {{- end }}
+          {{- if .Values.app.min_gas_price }}
+            - name: MIN_GAS_PRICE
+              value: "{{ .Values.app.min_gas_price }}"
+          {{- end }}
+          {{- if .Values.app.min_byte_price }}
+            - name: MIN_BYTE_PRICE
+              value: "{{ .Values.app.min_byte_price }}"
+          {{- end }}

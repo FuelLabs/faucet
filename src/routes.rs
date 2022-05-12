@@ -4,6 +4,7 @@ use axum::{
     Extension, Json,
 };
 use fuel_types::Address;
+use fuels_core::parameters::TxParameters;
 use handlebars::Handlebars;
 use reqwest::StatusCode;
 use secrecy::ExposeSecret;
@@ -110,6 +111,11 @@ pub async fn dispense_tokens(
             &address,
             config.fuel_dispense_amount,
             config.dispense_asset_id,
+            TxParameters {
+                gas_price: config.min_gas_price,
+                byte_price: config.min_byte_price,
+                ..Default::default()
+            },
         )
         .await
         .map_err(|e| {

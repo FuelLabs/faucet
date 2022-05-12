@@ -1,5 +1,6 @@
 use fuel_core::chain_config::{ChainConfig, CoinConfig, StateConfig};
 use fuel_core::service::{Config as NodeConfig, FuelService};
+use fuel_crypto::SecretKey;
 use fuel_faucet::config::Config;
 use fuel_faucet::start_server;
 use fuel_types::{Address, AssetId};
@@ -8,7 +9,6 @@ use fuels_signers::wallet::Wallet;
 use fuels_signers::Signer;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
-use secp256k1::SecretKey;
 use secrecy::Secret;
 use serde_json::json;
 use std::net::SocketAddr;
@@ -17,14 +17,13 @@ use std::net::SocketAddr;
 async fn dispense_sends_coins_to_valid_address() {
     let mut rng = StdRng::seed_from_u64(42);
     let recipient_address: Address = rng.gen();
-    let faucet_wallet_key_raw: [u8; 32] = rng.gen();
+    let secret_key: SecretKey = rng.gen();
     let wallet = Wallet::new_from_private_key(
-        SecretKey::from_slice(&faucet_wallet_key_raw).unwrap(),
+        secret_key,
         Provider::connect(SocketAddr::from(([0, 0, 0, 0], 0)))
             .await
             .unwrap(),
-    )
-    .unwrap();
+    );
 
     // start node
     let fuel_node = FuelService::new_node(NodeConfig {
@@ -44,6 +43,11 @@ async fn dispense_sends_coins_to_valid_address() {
             }),
             ..ChainConfig::local_testnet()
         },
+        tx_pool_config: fuel_txpool::Config {
+            min_gas_price: 1,
+            min_byte_price: 1,
+            ..Default::default()
+        },
         ..NodeConfig::local_node()
     })
     .await
@@ -56,11 +60,10 @@ async fn dispense_sends_coins_to_valid_address() {
     let faucet_config = Config {
         service_port: 0,
         node_url: format!("http://{}", fuel_node.bound_address),
-        wallet_secret_key: Some(Secret::new(format!(
-            "{:x}",
-            SecretKey::from_slice(&faucet_wallet_key_raw).unwrap()
-        ))),
+        wallet_secret_key: Some(Secret::new(format!("{:x}", secret_key))),
         dispense_asset_id: AssetId::default(),
+        min_gas_price: 1,
+        min_byte_price: 1,
         ..Default::default()
     };
     let (addr, _) = start_server(faucet_config.clone()).await;
