@@ -6,15 +6,15 @@ app:
   http_port: 80
   https_port: 443
   target_port: 3000
-  human_logging: ${fuel_faucet_human_logging}
-  wallet_secret_key: ${fuel_faucet_wallet_secret_key}
-  captcha_secret: ${fuel_faucet_captcha_secret}
-  node_url: ${fuel_faucet_node_url}
-  max_dispenses_per_minute: ${fuel_faucet_max_dispenses_per_minute}
-  dispense_amount: ${fuel_faucet_dispense_amount}
-  min_gas_price: ${fuel_faucet_min_gas_price}
-  min_byte_price: ${fuel_faucet_min_byte_price}
+  human_logging: "${fuel_faucet_human_logging}"
+  wallet_secret_key: "${fuel_faucet_wallet_secret_key}"
+  captcha_secret: "${fuel_faucet_captcha_secret}"
+  node_url: "${fuel_faucet_node_url}"
+  max_dispenses_per_minute: "${fuel_faucet_max_dispenses_per_minute}"
+  dispense_amount: "${fuel_faucet_dispense_amount}"
+  min_gas_price: "${fuel_faucet_min_gas_price}"
+  min_byte_price: "${fuel_faucet_min_byte_price}"
   image:
-    repository: ${fuel_faucet_image_repository}
-    tag: ${fuel_faucet_image_tag}
+    repository: "${fuel_faucet_image_repository}"
+    tag: "${fuel_faucet_image_tag}"
     pullPolicy: Always
