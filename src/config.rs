@@ -39,7 +39,7 @@ impl Default for Config {
             dispense_amount: env::var(DISPENSE_AMOUNT)
                 .unwrap_or_else(|_| DEFAULT_FAUCET_DISPENSE_AMOUNT.to_string())
                 .parse::<u64>()
-                .expect("expected a valid integer for FAUCET_DISPENSE_AMOUNT"),
+                .expect("expected a valid integer for DISPENSE_AMOUNT"),
             dispense_asset_id: FAUCET_ASSET_ID,
             max_dispenses_per_minute: env::var(MAX_DISPENSES_PER_MINUTE)
                 .unwrap_or_else(|_| DEFAULT_MAX_DISPENSES_PER_MINUTE.to_string())
