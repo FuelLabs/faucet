@@ -109,7 +109,7 @@ pub async fn dispense_tokens(
     wallet
         .transfer(
             &address,
-            config.fuel_dispense_amount,
+            config.dispense_amount,
             config.dispense_asset_id,
             TxParameters {
                 gas_price: config.min_gas_price,
@@ -128,11 +128,11 @@ pub async fn dispense_tokens(
 
     info!(
         "dispensed {} tokens to {:#x}",
-        config.fuel_dispense_amount, &address
+        config.dispense_amount, &address
     );
 
     Ok(DispenseResponse {
         status: "Success".to_string(),
-        tokens: config.fuel_dispense_amount,
+        tokens: config.dispense_amount,
     })
 }
