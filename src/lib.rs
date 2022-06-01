@@ -33,7 +33,7 @@ use tracing::info;
 use tracing_subscriber::filter::EnvFilter;
 
 pub mod config;
-pub mod structures;
+pub mod models;
 
 mod constants;
 mod recaptcha;

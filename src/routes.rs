@@ -1,4 +1,4 @@
-use crate::{recaptcha, structures::*, SharedConfig, SharedWallet};
+use crate::{models::*, recaptcha, SharedConfig, SharedWallet};
 use axum::{
     response::{Html, IntoResponse, Response},
     Extension, Json,
