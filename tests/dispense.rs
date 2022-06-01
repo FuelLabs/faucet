@@ -16,6 +16,7 @@ use std::net::SocketAddr;
 #[tokio::test]
 async fn dispense_sends_coins_to_valid_address() {
     let mut rng = StdRng::seed_from_u64(42);
+    let dispense_amount = rng.gen_range(1..10000u64);
     let recipient_address: Address = rng.gen();
     let secret_key: SecretKey = rng.gen();
     let wallet = Wallet::new_from_private_key(
@@ -61,6 +62,7 @@ async fn dispense_sends_coins_to_valid_address() {
         service_port: 0,
         node_url: format!("http://{}", fuel_node.bound_address),
         wallet_secret_key: Some(Secret::new(format!("{:x}", secret_key))),
+        dispense_amount,
         dispense_asset_id: AssetId::default(),
         min_gas_price: 1,
         min_byte_price: 1,
@@ -88,5 +90,5 @@ async fn dispense_sends_coins_to_valid_address() {
         .map(|coin| coin.amount.0)
         .sum();
 
-    assert_eq!(test_balance, faucet_config.fuel_dispense_amount);
+    assert_eq!(test_balance, faucet_config.dispense_amount);
 }

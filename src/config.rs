@@ -1,8 +1,8 @@
 use crate::constants::{
     CAPTCHA_SECRET, DEFAULT_FAUCET_DISPENSE_AMOUNT, DEFAULT_MAX_DISPENSES_PER_MINUTE,
-    DEFAULT_NODE_URL, DEFAULT_PORT, FAUCET_ASSET_ID, FAUCET_DISPENSE_AMOUNT, FUEL_NODE_URL,
-    HUMAN_LOGGING, LOG_FILTER, MAX_DISPENSES_PER_MINUTE, MIN_BYTE_PRICE, MIN_GAS_PRICE,
-    SERVICE_PORT, WALLET_SECRET_KEY,
+    DEFAULT_NODE_URL, DEFAULT_PORT, DISPENSE_AMOUNT, FAUCET_ASSET_ID, FUEL_NODE_URL, HUMAN_LOGGING,
+    LOG_FILTER, MAX_DISPENSES_PER_MINUTE, MIN_BYTE_PRICE, MIN_GAS_PRICE, SERVICE_PORT,
+    WALLET_SECRET_KEY,
 };
 use fuel_types::AssetId;
 use secrecy::Secret;
@@ -16,7 +16,7 @@ pub struct Config {
     pub captcha_secret: Option<Secret<String>>,
     pub node_url: String,
     pub wallet_secret_key: Option<Secret<String>>,
-    pub fuel_dispense_amount: u64,
+    pub dispense_amount: u64,
     pub dispense_asset_id: AssetId,
     pub max_dispenses_per_minute: u64,
     pub min_gas_price: u64,
@@ -36,7 +36,7 @@ impl Default for Config {
             node_url: env::var(FUEL_NODE_URL).unwrap_or_else(|_| DEFAULT_NODE_URL.to_string()),
             wallet_secret_key: env::var_os(WALLET_SECRET_KEY)
                 .map(|s| Secret::new(s.into_string().unwrap())),
-            fuel_dispense_amount: env::var(FAUCET_DISPENSE_AMOUNT)
+            dispense_amount: env::var(DISPENSE_AMOUNT)
                 .unwrap_or_else(|_| DEFAULT_FAUCET_DISPENSE_AMOUNT.to_string())
                 .parse::<u64>()
                 .expect("expected a valid integer for FAUCET_DISPENSE_AMOUNT"),
