@@ -33,6 +33,7 @@ use tracing::info;
 use tracing_subscriber::filter::EnvFilter;
 
 pub mod config;
+pub mod models;
 
 mod constants;
 mod recaptcha;
@@ -92,6 +93,7 @@ pub async fn start_server(
             )),
         )
         .route("/health", get(health))
+        .route("/dispense", get(routes::dispense_info))
         .route(
             "/dispense",
             post(routes::dispense_tokens).route_layer(

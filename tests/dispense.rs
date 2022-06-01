@@ -2,6 +2,7 @@ use fuel_core::chain_config::{ChainConfig, CoinConfig, StateConfig};
 use fuel_core::service::{Config as NodeConfig, FuelService};
 use fuel_crypto::SecretKey;
 use fuel_faucet::config::Config;
+use fuel_faucet::models::DispenseInfoResponse;
 use fuel_faucet::start_server;
 use fuel_types::{Address, AssetId};
 use fuels_signers::provider::Provider;
@@ -71,6 +72,21 @@ async fn dispense_sends_coins_to_valid_address() {
     let (addr, _) = start_server(faucet_config.clone()).await;
 
     let client = reqwest::Client::new();
+
+    let response = client
+        .get(format!("http://{}/dispense", addr))
+        .send()
+        .await
+        .unwrap()
+        .json::<DispenseInfoResponse>()
+        .await
+        .expect("Invalid response body");
+
+    assert_eq!(response.amount, faucet_config.dispense_amount);
+    assert_eq!(
+        response.asset_id,
+        faucet_config.dispense_asset_id.to_string()
+    );
 
     client
         .post(format!("http://{}/dispense", addr))
