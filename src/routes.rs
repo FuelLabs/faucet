@@ -1,4 +1,4 @@
-use crate::{recaptcha, SharedConfig, SharedWallet};
+use crate::{recaptcha, structures::*, SharedConfig, SharedWallet};
 use axum::{
     response::{Html, IntoResponse, Response},
     Extension, Json,
@@ -8,7 +8,6 @@ use fuels_core::parameters::TxParameters;
 use handlebars::Handlebars;
 use reqwest::StatusCode;
 use secrecy::ExposeSecret;
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
     collections::BTreeMap,
@@ -44,28 +43,10 @@ pub async fn health() -> Json<serde_json::Value> {
     Json(json!({ "up": true, "uptime": time - *START_TIME }))
 }
 
-#[derive(Deserialize, Debug)]
-pub struct DispenseInput {
-    address: String,
-    captcha: String,
-}
-
-#[derive(Serialize, Debug)]
-pub struct DispenseResponse {
-    status: String,
-    tokens: u64,
-}
-
 impl IntoResponse for DispenseResponse {
     fn into_response(self) -> Response {
         (StatusCode::CREATED, Json(self)).into_response()
     }
-}
-
-#[derive(Debug)]
-pub struct DispenseError {
-    status: StatusCode,
-    error: String,
 }
 
 impl IntoResponse for DispenseError {
@@ -77,6 +58,12 @@ impl IntoResponse for DispenseError {
             })),
         )
             .into_response()
+    }
+}
+
+impl IntoResponse for DispenseInfoResponse {
+    fn into_response(self) -> Response {
+        (StatusCode::OK, Json(self)).into_response()
     }
 }
 
@@ -134,5 +121,15 @@ pub async fn dispense_tokens(
     Ok(DispenseResponse {
         status: "Success".to_string(),
         tokens: config.dispense_amount,
+    })
+}
+
+#[tracing::instrument(skip(config))]
+pub async fn dispense_info(
+    Extension(config): Extension<SharedConfig>,
+) -> Result<DispenseInfoResponse, DispenseError> {
+    Ok(DispenseInfoResponse {
+        amount: config.dispense_amount,
+        asset_id: config.dispense_asset_id.to_string(),
     })
 }
