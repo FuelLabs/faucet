@@ -4,7 +4,6 @@ pub const LOG_FILTER: &str = "RUST_LOG";
 pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
 pub const CAPTCHA_SECRET: &str = "CAPTCHA_SECRET";
 pub const WALLET_SECRET_KEY: &str = "WALLET_SECRET_KEY";
-pub const FAUCET_DISPENSE_AMOUNT: &str = "FAUCET_DISPENSE_AMOUNT_KEY";
 pub const WALLET_SECRET_DEV_KEY: &str =
     "99ad179d4f892ff3124ccd817408ff8a4452d9c16bb1b4968b8a59797e13cd7a";
 pub const FUEL_NODE_URL: &str = "FUEL_NODE_URL";
