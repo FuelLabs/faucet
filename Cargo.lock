@@ -2026,6 +2026,7 @@ dependencies = [
  "fuel-types",
  "fuels-core",
  "fuels-signers",
+ "fuels-types",
  "handlebars",
  "insta",
  "lazy_static",

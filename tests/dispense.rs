@@ -8,6 +8,7 @@ use fuel_types::{Address, AssetId};
 use fuels_signers::provider::Provider;
 use fuels_signers::wallet::WalletUnlocked;
 use fuels_signers::Signer;
+use fuels_types::bech32::Bech32Address;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use secrecy::Secret;
@@ -15,10 +16,37 @@ use serde_json::json;
 use std::net::SocketAddr;
 
 #[tokio::test]
-async fn dispense_sends_coins_to_valid_address() {
+async fn dispense_sends_coins_to_valid_address_hex_address() {
     let mut rng = StdRng::seed_from_u64(42);
-    let dispense_amount = rng.gen_range(1..10000u64);
     let recipient_address: Address = rng.gen();
+
+    _dispense_sends_coins_to_valid_address(
+        rng,
+        recipient_address.into(),
+        format!("{:#x}", &recipient_address),
+    )
+    .await
+}
+
+#[tokio::test]
+async fn dispense_sends_coins_to_valid_address_non_hex() {
+    let mut rng = StdRng::seed_from_u64(42);
+    let recipient_address: Address = rng.gen();
+
+    _dispense_sends_coins_to_valid_address(
+        rng,
+        recipient_address.into(),
+        format!("{}", &recipient_address),
+    )
+    .await
+}
+
+async fn _dispense_sends_coins_to_valid_address(
+    mut rng: StdRng,
+    recipient_address: Bech32Address,
+    recipient_address_str: String,
+) {
+    let dispense_amount = rng.gen_range(1..10000u64);
     let secret_key: SecretKey = rng.gen();
     let wallet = WalletUnlocked::new_from_private_key(
         secret_key,
@@ -93,7 +121,7 @@ async fn dispense_sends_coins_to_valid_address() {
         .post(format!("http://{}/dispense", addr))
         .json(&json!({
             "captcha": "",
-            "address": format!("{:#x}", &recipient_address)
+            "address": recipient_address_str,
         }))
         .send()
         .await

@@ -5,6 +5,7 @@ use axum::{
 };
 use fuel_types::Address;
 use fuels_core::parameters::TxParameters;
+use fuels_types::bech32::Bech32Address;
 use handlebars::Handlebars;
 use reqwest::StatusCode;
 use secrecy::ExposeSecret;
@@ -74,10 +75,16 @@ pub async fn dispense_tokens(
     Extension(config): Extension<SharedConfig>,
 ) -> Result<DispenseResponse, DispenseError> {
     // parse deposit address
-    let address = Address::from_str(input.address.as_str()).map_err(|_| DispenseError {
-        status: StatusCode::BAD_REQUEST,
-        error: "invalid address".to_string(),
-    })?;
+    let address = if let Ok(address) = Address::from_str(input.address.as_str()) {
+        Ok(address)
+    } else if let Ok(address) = Bech32Address::from_str(input.address.as_str()) {
+        Ok(address.into())
+    } else {
+        return Err(DispenseError {
+            status: StatusCode::BAD_REQUEST,
+            error: "invalid address".to_string(),
+        });
+    }?;
 
     // verify captcha
     if let Some(s) = config.captcha_secret.clone() {

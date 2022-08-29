@@ -153,9 +153,9 @@ fn init_logger(config: &Config) {
         .with_writer(std::io::stderr)
         .with_env_filter(filter);
 
-    if config.human_logging {
+    let inited = if config.human_logging {
         // use pretty logs
-        sub.init();
+        sub.try_init()
     } else {
         // use machine parseable structured logs
         sub
@@ -163,7 +163,10 @@ fn init_logger(config: &Config) {
             .with_ansi(false)
             // use json
             .json()
-            .init();
+            .try_init()
+    };
+    if let Err(err) = inited {
+        println!("Failed initialization of the logger: {}", err);
     }
 }
 
