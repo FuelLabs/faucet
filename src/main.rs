@@ -1,5 +1,5 @@
-use tracing_subscriber::EnvFilter;
 use fuel_faucet::{config::Config, start_server};
+use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() {
