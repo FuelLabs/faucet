@@ -2196,8 +2196,9 @@ dependencies = [
 
 [[package]]
 name = "fuels-core"
-version = "0.20.0"
-source = "git+https://github.com/FuelLabs/fuels-rs?branch=hal3e/bump-fuel-core#8a7f23d4cbde791ab9fb3c186d84b7c38d5b0250"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d60c30cabd0a7c08b634937284a4d2e4a5c7d29daf6f6b4630743f1f474d5a7"
 dependencies = [
  "Inflector",
  "anyhow",
@@ -2221,8 +2222,9 @@ dependencies = [
 
 [[package]]
 name = "fuels-signers"
-version = "0.20.0"
-source = "git+https://github.com/FuelLabs/fuels-rs?branch=hal3e/bump-fuel-core#8a7f23d4cbde791ab9fb3c186d84b7c38d5b0250"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fa8399ede6717438eb8429d0a3d6852b60abe7a29a456c5f1d1870c571ac02a"
 dependencies = [
  "async-trait",
  "bytes",
@@ -2243,8 +2245,9 @@ dependencies = [
 
 [[package]]
 name = "fuels-types"
-version = "0.20.0"
-source = "git+https://github.com/FuelLabs/fuels-rs?branch=hal3e/bump-fuel-core#8a7f23d4cbde791ab9fb3c186d84b7c38d5b0250"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f6097a178b4f5afae612010f97b92aefd62cdc4673195e7d39681cdc15cd51d"
 dependencies = [
  "anyhow",
  "bech32 0.9.1",
