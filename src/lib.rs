@@ -30,7 +30,6 @@ use tower_http::{
     trace::TraceLayer,
 };
 use tracing::info;
-use tracing_subscriber::filter::EnvFilter;
 
 pub mod config;
 pub mod models;
@@ -45,7 +44,6 @@ pub type SharedConfig = Arc<Config>;
 pub async fn start_server(
     service_config: Config,
 ) -> (SocketAddr, JoinHandle<Result<(), anyhow::Error>>) {
-    init_logger(&service_config);
     info!("{:#?}", &service_config);
 
     // connect to the fuel node
@@ -140,34 +138,6 @@ pub async fn start_server(
                 .map_err(|e| anyhow!(e))
         }),
     )
-}
-
-fn init_logger(config: &Config) {
-    let filter = if !config.log_filter.is_empty() {
-        EnvFilter::try_from_default_env().expect("Invalid `RUST_LOG` provided")
-    } else {
-        EnvFilter::new("info")
-    };
-
-    let sub = tracing_subscriber::fmt::Subscriber::builder()
-        .with_writer(std::io::stderr)
-        .with_env_filter(filter);
-
-    let inited = if config.human_logging {
-        // use pretty logs
-        sub.try_init()
-    } else {
-        // use machine parseable structured logs
-        sub
-            // disable terminal colors
-            .with_ansi(false)
-            // use json
-            .json()
-            .try_init()
-    };
-    if let Err(err) = inited {
-        println!("Failed initialization of the logger: {}", err);
-    }
 }
 
 async fn handle_error(error: BoxError) -> impl IntoResponse {
