@@ -128,7 +128,7 @@ async fn _dispense_sends_coins_to_valid_address(
         .unwrap();
 
     let test_balance: u64 = provider
-        .get_coins(&recipient_address.into(), faucet_config.dispense_asset_id)
+        .get_coins(&recipient_address, faucet_config.dispense_asset_id)
         .await
         .unwrap()
         .iter()
