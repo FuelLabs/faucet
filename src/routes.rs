@@ -1,4 +1,4 @@
-use crate::{models::*, recaptcha, SharedConfig, SharedWallet};
+use crate::{models::*, recaptcha, SharedConfig, SharedWallet, config::Config};
 use axum::{
     response::{Html, IntoResponse, Response},
     Extension, Json,
@@ -19,12 +19,14 @@ use tracing::{error, info};
 lazy_static::lazy_static! {
     static ref PAGE: String = {
         let template = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
+        let server_config = Config::default();
 
         // sub in values
         let mut handlebars = Handlebars::new();
         handlebars.register_template_string("index", template).unwrap();
         let mut data = BTreeMap::new();
         data.insert("page_title", "Fuel Faucet");
+        data.insert("node_url", server_config.node_url.as_str());
         handlebars.render("index", &data).unwrap()
     };
 
