@@ -6,7 +6,7 @@ use fuel_faucet::models::DispenseInfoResponse;
 use fuel_faucet::start_server;
 use fuel_types::{Address, AssetId};
 use fuels_signers::provider::Provider;
-use fuels_signers::wallet::Wallet;
+use fuels_signers::wallet::WalletUnlocked;
 use fuels_signers::Signer;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -20,11 +20,13 @@ async fn dispense_sends_coins_to_valid_address() {
     let dispense_amount = rng.gen_range(1..10000u64);
     let recipient_address: Address = rng.gen();
     let secret_key: SecretKey = rng.gen();
-    let wallet = Wallet::new_from_private_key(
+    let wallet = WalletUnlocked::new_from_private_key(
         secret_key,
-        Provider::connect(SocketAddr::from(([0, 0, 0, 0], 0)))
-            .await
-            .unwrap(),
+        Some(
+            Provider::connect(SocketAddr::from(([0, 0, 0, 0], 0)))
+                .await
+                .unwrap(),
+        ),
     );
 
     // start node
@@ -36,18 +38,18 @@ async fn dispense_sends_coins_to_valid_address() {
                     output_index: None,
                     block_created: None,
                     maturity: None,
-                    owner: wallet.address(),
+                    owner: wallet.address().into(),
                     amount: 1 << 50,
                     asset_id: Default::default(),
                 }]),
                 contracts: None,
                 height: None,
+                messages: None,
             }),
             ..ChainConfig::local_testnet()
         },
-        tx_pool_config: fuel_txpool::Config {
+        txpool: fuel_txpool::Config {
             min_gas_price: 1,
-            min_byte_price: 1,
             ..Default::default()
         },
         ..NodeConfig::local_node()
@@ -66,7 +68,6 @@ async fn dispense_sends_coins_to_valid_address() {
         dispense_amount,
         dispense_asset_id: AssetId::default(),
         min_gas_price: 1,
-        min_byte_price: 1,
         ..Default::default()
     };
     let (addr, _) = start_server(faucet_config.clone()).await;
@@ -99,7 +100,7 @@ async fn dispense_sends_coins_to_valid_address() {
         .unwrap();
 
     let test_balance: u64 = provider
-        .get_coins(&recipient_address)
+        .get_coins(&recipient_address.into(), faucet_config.dispense_asset_id)
         .await
         .unwrap()
         .iter()

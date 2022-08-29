@@ -95,12 +95,11 @@ pub async fn dispense_tokens(
     // transfer tokens
     wallet
         .transfer(
-            &address,
+            &address.into(),
             config.dispense_amount,
             config.dispense_asset_id,
             TxParameters {
                 gas_price: config.min_gas_price,
-                byte_price: config.min_byte_price,
                 ..Default::default()
             },
         )
