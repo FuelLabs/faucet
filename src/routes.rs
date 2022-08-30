@@ -25,7 +25,9 @@ pub fn render_page(node_url: String) -> String {
     let template = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
     // sub in values
     let mut handlebars = Handlebars::new();
-    handlebars.register_template_string("index", template).unwrap();
+    handlebars
+        .register_template_string("index", template)
+        .unwrap();
     let mut data = BTreeMap::new();
     data.insert("page_title", "Fuel Faucet");
     data.insert("node_url", node_url.as_str());
@@ -33,9 +35,7 @@ pub fn render_page(node_url: String) -> String {
     handlebars.render("index", &data).unwrap()
 }
 
-pub async fn main(
-    Extension(config): Extension<SharedConfig>,
-) -> Html<String> {
+pub async fn main(Extension(config): Extension<SharedConfig>) -> Html<String> {
     let node_url = config.node_url.clone();
     Html(render_page(node_url))
 }
