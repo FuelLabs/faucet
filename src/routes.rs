@@ -1,4 +1,4 @@
-use crate::{config::Config, models::*, recaptcha, SharedConfig, SharedWallet};
+use crate::{models::*, recaptcha, SharedConfig, SharedWallet};
 use axum::{
     response::{Html, IntoResponse, Response},
     Extension, Json,
@@ -17,24 +17,27 @@ use std::{
 use tracing::{error, info};
 
 lazy_static::lazy_static! {
-    static ref PAGE: String = {
-        let template = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
-        let server_config = Config::default();
-
-        // sub in values
-        let mut handlebars = Handlebars::new();
-        handlebars.register_template_string("index", template).unwrap();
-        let mut data = BTreeMap::new();
-        data.insert("page_title", "Fuel Faucet");
-        data.insert("node_url", server_config.node_url.as_str());
-        handlebars.render("index", &data).unwrap()
-    };
-
     static ref START_TIME: u64 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
 }
 
-pub async fn main() -> Html<&'static str> {
-    Html(&PAGE)
+#[memoize::memoize]
+pub fn render_page(node_url: String) -> String {
+    let template = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
+    // sub in values
+    let mut handlebars = Handlebars::new();
+    handlebars.register_template_string("index", template).unwrap();
+    let mut data = BTreeMap::new();
+    data.insert("page_title", "Fuel Faucet");
+    data.insert("node_url", node_url.as_str());
+    // render page
+    handlebars.render("index", &data).unwrap()
+}
+
+pub async fn main(
+    Extension(config): Extension<SharedConfig>,
+) -> Html<String> {
+    let node_url = config.node_url.clone();
+    Html(render_page(node_url))
 }
 
 pub async fn health() -> Json<serde_json::Value> {
