@@ -80,7 +80,3 @@ spec:
             - name: MIN_GAS_PRICE
               value: "{{ .Values.app.min_gas_price }}"
           {{- end }}
-          {{- if .Values.app.min_byte_price }}
-            - name: MIN_BYTE_PRICE
-              value: "{{ .Values.app.min_byte_price }}"
-          {{- end }}

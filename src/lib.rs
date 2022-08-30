@@ -13,8 +13,8 @@ use axum::{
 };
 use fuel_gql_client::client::schema::coin::CoinStatus;
 use fuel_gql_client::client::FuelClient;
-use fuel_types::AssetId;
-use fuels_signers::{provider::Provider, wallet::Wallet, Signer};
+use fuel_types::Address;
+use fuels_signers::{provider::Provider, wallet::WalletUnlocked, Signer};
 use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
 use std::{
@@ -30,7 +30,6 @@ use tower_http::{
     trace::TraceLayer,
 };
 use tracing::info;
-use tracing_subscriber::filter::EnvFilter;
 
 pub mod config;
 pub mod models;
@@ -39,14 +38,13 @@ mod constants;
 mod recaptcha;
 mod routes;
 
-pub type SharedWallet = Arc<Wallet>;
+pub type SharedWallet = Arc<WalletUnlocked>;
 pub type SharedConfig = Arc<Config>;
 
 pub async fn start_server(
     service_config: Config,
 ) -> (SocketAddr, JoinHandle<Result<(), anyhow::Error>>) {
-    init_logger(&service_config);
-    tracing::info!("{:#?}", &service_config);
+    info!("{:#?}", &service_config);
 
     // connect to the fuel node
     let client = FuelClient::new(service_config.node_url.clone())
@@ -57,30 +55,28 @@ pub async fn start_server(
         .wallet_secret_key
         .clone()
         .unwrap_or_else(|| Secret::new(WALLET_SECRET_DEV_KEY.to_string()));
-    let wallet = Wallet::new_from_private_key(
+    let wallet = WalletUnlocked::new_from_private_key(
         secret
             .expose_secret()
             .parse()
             .expect("Unable to load secret key"),
-        provider,
+        Some(provider),
     );
 
     let balance = wallet
-        .get_coins()
+        .get_coins(service_config.dispense_asset_id)
         .await
         .expect("Failed to fetch initial balance from fuel core")
         .into_iter()
         .filter_map(|coin| {
-            let coin_asset: AssetId = coin.asset_id.into();
-            if coin.status == CoinStatus::Unspent && coin_asset == service_config.dispense_asset_id
-            {
+            if coin.status == CoinStatus::Unspent {
                 Some(coin.amount.0)
             } else {
                 None
             }
         })
         .sum::<u64>();
-    info!("Faucet Account: {:#x}", &wallet.address());
+    info!("Faucet Account: {:#x}", Address::from(wallet.address()));
     info!("Faucet Balance: {}", balance);
 
     // setup routes
@@ -142,31 +138,6 @@ pub async fn start_server(
                 .map_err(|e| anyhow!(e))
         }),
     )
-}
-
-fn init_logger(config: &Config) {
-    let filter = if !config.log_filter.is_empty() {
-        EnvFilter::try_from_default_env().expect("Invalid `RUST_LOG` provided")
-    } else {
-        EnvFilter::new("info")
-    };
-
-    let sub = tracing_subscriber::fmt::Subscriber::builder()
-        .with_writer(std::io::stderr)
-        .with_env_filter(filter);
-
-    if config.human_logging {
-        // use pretty logs
-        sub.init();
-    } else {
-        // use machine parseable structured logs
-        sub
-            // disable terminal colors
-            .with_ansi(false)
-            // use json
-            .json()
-            .init();
-    }
 }
 
 async fn handle_error(error: BoxError) -> impl IntoResponse {
