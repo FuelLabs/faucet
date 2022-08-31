@@ -68,6 +68,8 @@ spec:
           {{- end }}
             - name: FUEL_NODE_URL
               value: "{{ .Values.app.node_url }}"
+            - name: PUBLIC_FUEL_NODE_URL
+              value: "{{ .Values.app.public_node_url }}"
           {{- if .Values.app.max_dispenses_per_minute }}
             - name: MAX_DISPENSES_PER_MINUTE
               value: "{{ .Values.app.max_dispenses_per_minute }}"
