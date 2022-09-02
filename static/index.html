@@ -11,7 +11,7 @@
     <script src="https://www.google.com/recaptcha/api.js"></script>
     <script>
       const faucetApp = (function () {
-        let providerUrl = "{{ node_url }}";
+        let providerUrl = "{{ public_node_url }}";
         let blockExplorer = "https://fuellabs.github.io/block-explorer-v2";
 
         function give_me_coins(form) {
@@ -244,6 +244,6 @@
         <a href="#" id="explorer-link" class="button">See on Fuel Explorer</a>
       </div>
     </div>
-    <div class="provider-url">Node url: {{ node_url }}</div>
+    <div class="provider-url">Node url: {{ public_node_url }}</div>
   </body>
 </html>

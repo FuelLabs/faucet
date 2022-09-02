@@ -22,7 +22,7 @@ lazy_static::lazy_static! {
 }
 
 #[memoize::memoize]
-pub fn render_page(node_url: String) -> String {
+pub fn render_page(public_node_url: String) -> String {
     let template = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
     // sub in values
     let mut handlebars = Handlebars::new();
@@ -31,14 +31,14 @@ pub fn render_page(node_url: String) -> String {
         .unwrap();
     let mut data = BTreeMap::new();
     data.insert("page_title", "Fuel Faucet");
-    data.insert("node_url", node_url.as_str());
+    data.insert("public_node_url", public_node_url.as_str());
     // render page
     handlebars.render("index", &data).unwrap()
 }
 
 pub async fn main(Extension(config): Extension<SharedConfig>) -> Html<String> {
-    let node_url = config.node_url.clone();
-    Html(render_page(node_url))
+    let public_node_url = config.public_node_url.clone();
+    Html(render_page(public_node_url))
 }
 
 pub async fn health() -> Json<serde_json::Value> {
