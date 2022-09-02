@@ -17,7 +17,7 @@ The faucet makes use of environment variables for configuration.
 | WALLET_SECRET_KEY    | A hex formatted string of the wallet private key that owns some tokens. |
 | FUEL_NODE_URL        | The GraphQL endpoint for connecting to fuel-core.                       |
 | PUBLIC_FUEL_NODE_URL | The public GraphQL endpoint for connecting to fuel-core. Ex.: https://node.fuel.network/graphql |
-| PORT         | The port the service will listen for http connections on.               |
+| SERVICE_PORT         | The port the service will listen for http connections on.               |
 | DISPENSE_AMOUNT      | Dispense amount on each faucet                                          |
 | MIN_GAS_PRICE        | The minimum gas price to use in each transfer                           |
 
