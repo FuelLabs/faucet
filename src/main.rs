@@ -18,6 +18,8 @@ fn init_logger(config: &Config) {
 
     let sub = tracing_subscriber::fmt::Subscriber::builder()
         .with_writer(std::io::stderr)
+        .with_line_number(true)
+        .with_file(true)
         .with_env_filter(filter);
 
     if config.human_logging {

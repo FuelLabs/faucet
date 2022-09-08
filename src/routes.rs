@@ -41,12 +41,37 @@ pub async fn main(Extension(config): Extension<SharedConfig>) -> Html<String> {
     Html(render_page(public_node_url))
 }
 
-pub async fn health() -> Json<serde_json::Value> {
+#[tracing::instrument(skip(wallet))]
+pub async fn health(Extension(wallet): Extension<SharedWallet>) -> Response {
+    // ping client for health
+    let client = wallet
+        .get_provider()
+        .expect("client provider")
+        .client
+        .health()
+        .await
+        .unwrap_or(false);
+
     let time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis() as u64;
-    Json(json!({ "up": true, "uptime": time - *START_TIME }))
+
+    let status = if client {
+        StatusCode::OK
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
+    };
+
+    (
+        status,
+        Json(json!({
+            "up": true,
+            "uptime": time - *START_TIME,
+            "fuel-core" : client,
+        })),
+    )
+        .into_response()
 }
 
 impl IntoResponse for DispenseResponse {
