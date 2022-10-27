@@ -38,6 +38,7 @@ spec:
         app: {{ template "fuel-faucet.name" . }}
         release: {{ .Release.Name }}
     spec:
+      serviceAccountName: {{ .Values.app.service_account_name }}
       containers:
         - name: {{ .Values.app.name }}
           image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
@@ -48,6 +49,10 @@ spec:
             - name: http
               containerPort: {{ .Values.app.target_port }}
               protocol: TCP
+          volumeMounts:
+            - name: faucet-secrets-mount
+              mountPath: "/mnt/secrets"
+              readOnly: true
           livenessProbe:
             httpGet:
               path: /health
@@ -82,3 +87,11 @@ spec:
             - name: MIN_GAS_PRICE
               value: "{{ .Values.app.min_gas_price }}"
           {{- end }}
+      volumes: 
+      - name: faucet-secrets-mount
+        csi:
+           driver: secrets-store.csi.k8s.io
+           readOnly: true
+           volumeAttributes:
+             secretProviderClass: {{ .Values.app.secret_provider_class }}
+           
