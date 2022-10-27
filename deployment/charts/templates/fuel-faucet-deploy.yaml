@@ -39,6 +39,13 @@ spec:
         release: {{ .Release.Name }}
     spec:
       serviceAccountName: {{ .Values.app.service_account_name }}
+      volumes: 
+      - name: faucet-secrets-mount
+        csi:
+           driver: secrets-store.csi.k8s.io
+           readOnly: true
+           volumeAttributes:
+             secretProviderClass: {{ .Values.app.secret_provider_class }}
       containers:
         - name: {{ .Values.app.name }}
           image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
@@ -87,11 +94,3 @@ spec:
             - name: MIN_GAS_PRICE
               value: "{{ .Values.app.min_gas_price }}"
           {{- end }}
-      volumes: 
-      - name: faucet-secrets-mount
-        csi:
-           driver: secrets-store.csi.k8s.io
-           readOnly: true
-           volumeAttributes:
-             secretProviderClass: {{ .Values.app.secret_provider_class }}
-           
