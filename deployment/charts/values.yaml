@@ -14,6 +14,8 @@ app:
   max_dispenses_per_minute: "${fuel_faucet_max_dispenses_per_minute}"
   dispense_amount: "${fuel_faucet_dispense_amount}"
   min_gas_price: "${fuel_faucet_min_gas_price}"
+  service_account_name: "${fuel_faucet_service_account_name}"
+  secret_provider_class: "${fuel_faucet_secret_provider_class}"
   image:
     repository: "${fuel_faucet_image_repository}"
     tag: "${fuel_faucet_image_tag}"
