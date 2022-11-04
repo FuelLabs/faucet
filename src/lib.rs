@@ -125,7 +125,7 @@ pub async fn start_server(
 
     // run the server
     let addr = SocketAddr::from(([0, 0, 0, 0], service_config.service_port));
-    let listener = TcpListener::bind(&addr).unwrap();
+    let listener = TcpListener::bind(addr).unwrap();
     let bound_addr = listener.local_addr().unwrap();
     info!("listening on {}", bound_addr);
     (
