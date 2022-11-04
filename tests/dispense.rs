@@ -51,7 +51,7 @@ async fn _dispense_sends_coins_to_valid_address(
     let wallet = WalletUnlocked::new_from_private_key(
         secret_key,
         Some(
-            Provider::connect(SocketAddr::from(([0, 0, 0, 0], 0)))
+            Provider::connect(&SocketAddr::from(([0, 0, 0, 0], 0)).to_string())
                 .await
                 .unwrap(),
         ),
@@ -86,7 +86,9 @@ async fn _dispense_sends_coins_to_valid_address(
     .unwrap();
 
     // setup provider
-    let provider = Provider::connect(fuel_node.bound_address).await.unwrap();
+    let provider = Provider::connect(&fuel_node.bound_address.to_string())
+        .await
+        .unwrap();
 
     // start faucet
     let faucet_config = Config {
