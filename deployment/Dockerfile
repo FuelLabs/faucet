@@ -7,7 +7,6 @@ RUN apt-get update && \
     lld \
     clang \
     libclang-dev \
-    curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -30,7 +29,7 @@ RUN cargo build --release
 FROM ubuntu:22.04 as run
 
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
     # Clean up
     && apt-get autoremove -y \
     && apt-get clean -y \
