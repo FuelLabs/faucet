@@ -7,6 +7,7 @@ RUN apt-get update && \
     lld \
     clang \
     libclang-dev \
+    curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
