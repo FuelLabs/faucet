@@ -41,3 +41,8 @@ rand = "0.8"
 
 [build-dependencies]
 minify-html = "0.8"
+
+[patch.crates-io]
+fuel-gql-client = { git = "https://github.com/FuelLabs/fuel-core/", branch = "release/0.10.2" }
+fuel-core = { git = "https://github.com/FuelLabs/fuel-core/", branch = "release/0.10.2" }
+fuel-txpool = { git = "https://github.com/FuelLabs/fuel-core/", branch = "release/0.10.2" }
