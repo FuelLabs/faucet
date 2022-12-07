@@ -93,7 +93,8 @@ pub async fn start_server(
         .route(
             "/dispense",
             post(routes::dispense_tokens).route_layer(
-                // apply rate limiting specifically on the dispense endpoint
+                // Apply rate limiting specifically on the dispense endpoint, and
+                // only allow a single instance at a time to avoid race conditions
                 ServiceBuilder::new()
                     .layer(HandleErrorLayer::new(handle_error))
                     .buffer(MAX_CONCURRENT_REQUESTS)
@@ -101,6 +102,7 @@ pub async fn start_server(
                         service_config.max_dispenses_per_minute,
                         Duration::from_secs(60),
                     )
+                    .concurrency_limit(1)
                     .into_inner(),
             ),
         )
