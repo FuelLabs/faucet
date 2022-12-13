@@ -15,9 +15,9 @@ anyhow = "1.0"
 axum = "0.5"
 fuel-gql-client = "0.15"
 fuel-types = "0.5"
-fuels-core = "0.32"
-fuels-signers = "0.32"
-fuels-types = "0.32"
+fuels-core = "0.32.2"
+fuels-signers = "0.32.2"
+fuels-types = "0.32.2"
 handlebars = "4.2"
 lazy_static = "1.4"
 memoize = "0.3.1"
@@ -41,8 +41,3 @@ rand = "0.8"
 
 [build-dependencies]
 minify-html = "0.8"
-
-[patch.crates-io]
-fuels-signers = { git = "https://github.com/FuelLabs/fuels-rs" }
-fuels-core = { git = "https://github.com/FuelLabs/fuels-rs" }
-fuels-types = { git = "https://github.com/FuelLabs/fuels-rs" }
