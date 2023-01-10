@@ -112,7 +112,7 @@ pub async fn start_server(
                 .layer(HandleErrorLayer::new(handle_error))
                 .load_shed()
                 .concurrency_limit(MAX_CONCURRENT_REQUESTS)
-                .timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(60))
                 .layer(TraceLayer::new_for_http())
                 .layer(Extension(Arc::new(wallet)))
                 .layer(Extension(Arc::new(service_config.clone())))
