@@ -11,7 +11,6 @@ use axum::{
     routing::{get, post},
     BoxError, Extension, Json, Router,
 };
-use fuel_gql_client::client::schema::coin::CoinStatus;
 use fuel_gql_client::client::FuelClient;
 use fuel_types::Address;
 use fuels_signers::{provider::Provider, wallet::WalletUnlocked, Signer};
@@ -68,12 +67,9 @@ pub async fn start_server(
         .await
         .expect("Failed to fetch initial balance from fuel core")
         .into_iter()
-        .filter_map(|coin| {
-            if coin.status == CoinStatus::Unspent {
-                Some(coin.amount.0)
-            } else {
-                None
-            }
+        .filter_map(|coin| match coin.status {
+            fuels_types::coin::CoinStatus::Unspent => Some(coin.amount),
+            _ => None,
         })
         .sum::<u64>();
     info!("Faucet Account: {:#x}", Address::from(wallet.address()));

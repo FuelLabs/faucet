@@ -134,7 +134,7 @@ async fn _dispense_sends_coins_to_valid_address(
         .await
         .unwrap()
         .iter()
-        .map(|coin| coin.amount.0)
+        .map(|coin| coin.amount)
         .sum();
 
     assert_eq!(test_balance, faucet_config.dispense_amount);
