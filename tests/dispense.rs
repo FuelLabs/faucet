@@ -94,7 +94,7 @@ async fn _dispense_sends_coins_to_valid_address(
     let faucet_config = Config {
         service_port: 0,
         node_url: format!("http://{}", fuel_node.bound_address),
-        wallet_secret_key: Some(Secret::new(format!("{:x}", secret_key))),
+        wallet_secret_key: Some(Secret::new(format!("{secret_key:x}"))),
         dispense_amount,
         dispense_asset_id: AssetId::default(),
         min_gas_price: 1,
@@ -105,7 +105,7 @@ async fn _dispense_sends_coins_to_valid_address(
     let client = reqwest::Client::new();
 
     let response = client
-        .get(format!("http://{}/dispense", addr))
+        .get(format!("http://{addr}/dispense"))
         .send()
         .await
         .unwrap()
@@ -120,7 +120,7 @@ async fn _dispense_sends_coins_to_valid_address(
     );
 
     client
-        .post(format!("http://{}/dispense", addr))
+        .post(format!("http://{addr}/dispense"))
         .json(&json!({
             "captcha": "",
             "address": recipient_address_str,

@@ -160,7 +160,7 @@ async fn handle_error(error: BoxError) -> impl IntoResponse {
     (
         StatusCode::INTERNAL_SERVER_ERROR,
         Json(json!({
-            "error": format!("Unhandled internal error: {}", error)
+            "error": format!("Unhandled internal error: {error}")
         })),
     )
 }
