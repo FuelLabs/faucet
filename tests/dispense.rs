@@ -76,7 +76,7 @@ async fn _dispense_sends_coins_to_valid_address(
             }),
             ..ChainConfig::local_testnet()
         },
-        txpool: fuel_txpool::Config {
+        txpool: fuel_core_txpool::Config {
             min_gas_price: 1,
             ..Default::default()
         },

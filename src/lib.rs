@@ -11,7 +11,7 @@ use axum::{
     routing::{get, post},
     BoxError, Extension, Json, Router,
 };
-use fuel_gql_client::client::FuelClient;
+use fuel_core_client::client::FuelClient;
 use fuel_types::Address;
 use fuels_signers::{provider::Provider, wallet::WalletUnlocked, Signer};
 use secrecy::{ExposeSecret, Secret};
