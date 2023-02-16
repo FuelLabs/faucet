@@ -59,10 +59,7 @@ fn parse_bool(env_var: &str, default: bool) -> bool {
     env::var_os(env_var)
         .map(|s| {
             s.to_str().unwrap().parse().unwrap_or_else(|_| {
-                panic!(
-                    "Expected `true` or `false` to be provided for `{}`",
-                    env_var
-                )
+                panic!("Expected `true` or `false` to be provided for `{env_var}`")
             })
         })
         .unwrap_or(default)
