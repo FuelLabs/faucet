@@ -54,7 +54,7 @@ spec:
               port: {{ .Values.app.target_port }}
             initialDelaySeconds: 10
             periodSeconds: 5
-            timeoutSeconds: 10
+            timeoutSeconds: 60
           env:
             - name: HUMAN_LOGGING
               value: "{{ .Values.app.human_logging | default false }}"
