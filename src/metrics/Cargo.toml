@@ -1,0 +1,18 @@
+[package]
+name = "fuel-faucet-metrics"
+version = { workspace = true }
+authors = { workspace = true }
+categories = ["cryptography::cryptocurrencies"]
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
+license = { workspace = true }
+repository = { workspace = true }
+description = "Fuel faucet metrics"
+
+[dependencies]
+axum = { workspace = true }
+lazy_static = { workspace = true }
+once_cell = { workspace = true }
+prometheus-client = { workspace = true }
+
