@@ -13,8 +13,45 @@ use libc::pid_t;
 const METRICS_NUMBER: usize = 7;
 
 #[derive(Debug)]
-pub struct ProcessMetrics {
+struct ProcessStat {
+    // from /proc/<pid>/stat
+    
     pid: pid_t,
+    ppid: pid_t,
+    comm: String,
+    utime: u64,
+    stime: u64,
+    num_threads: i64,
+    vsize: u64,
+    rss: i64,
+    delayacct_blkio_ticks: u128,
+    majflt: u64,
+
+    statm: u64,       // from /proc/statm
+    loadavg: String,  // from /proc/loadavg
+    meminfo: String,  // from /proc/meminfo
+    cpustat: String,  // from /proc/stat
+}    
+
+#[derive(Debug)]
+struct ProcessStatm {
+    statm: u64,
+}
+
+#[derive(Debug)]
+struct ProcessMetrics {
+    pid: pid_t,
+    ppid: pid_t,
+    comm: String,
+    utime: u64,
+    stime: u64,
+    num_threads: i64,
+    vsize: u64,
+    rss: i64,
+    delayacct_blkio_ticks: u128,
+    majflt: u64,
+    
+
     descs: Vec<Desc>,
     cpu_total: Counter,
     open_fds: Gauge,
