@@ -8,12 +8,9 @@ use lazy_static::lazy_static;
 use prometheus::{core::Collector, core::Desc, Counter, Opts};
 use prometheus::proto::Gauge;
 
-pub use libc::pid_t;
+use libc::pid_t;
 
 const METRICS_NUMBER: usize = 7;
-
-/// A collector which exports the current state of process metrics including cpu, memory and
-/// file descriptor usage, thread count, as well as the process start time for the given process id.
 
 #[derive(Debug)]
 pub struct ProcessMetrics {
@@ -28,8 +25,13 @@ pub struct ProcessMetrics {
     threads: Gauge,
 }
 
+// A collector which exports the current state of process metrics; including cpu, memory and
+// file descriptor usage. Additionally, thread count, along with process start time, are included
+// for the given process id.
+
 impl ProcessCollector {
-    /// Create a `ProcessCollector` with the given process id and namespace.
+    // Create a `ProcessCollector` with the given process id and namespace.
+    
     pub fn new<S: Into<String>>(pid: pid_t, namespace: S) -> ProcessCollector {
         let namespace = namespace.into();
         let mut descs = Vec::new();
@@ -37,8 +39,7 @@ impl ProcessCollector {
         let cpu_total = IntCounter::with_opts(
             Opts::new(
                 "process_cpu_seconds_total",
-                "Total user and system CPU time spent in \
-                 seconds.",
+                "Total user and system CPU time spent in seconds.",
             )
             .namespace(namespace.clone()),
         )
