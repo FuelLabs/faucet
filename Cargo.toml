@@ -1,3 +1,11 @@
+
+# This Cargo file describes the toplevel hierarchy of the fuel-faucet project.
+
+[workspace]
+members = [
+  "crates/metrics",
+]
+
 [package]
 name = "fuel-faucet"
 version = "0.0.0"

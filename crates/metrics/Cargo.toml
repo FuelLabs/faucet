@@ -1,3 +1,6 @@
+
+# This Cargo manifest describes the fuel-faucet metrics hierarchy
+
 [package]
 name = "fuel-faucet-metrics"
 version = { workspace = true }
