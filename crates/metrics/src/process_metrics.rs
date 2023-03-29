@@ -5,11 +5,8 @@
 
 use lazy_static::lazy_static;
 
-use crate::counter::IntCounter;
-use crate::desc::Desc;
-use crate::gauge::IntGauge;
-use crate::metrics::{Collector, Opts};
-use crate::proto;
+use prometheus::{core::Collector, core::Desc, Counter, Opts};
+use prometheus::proto::Gauge;
 
 pub use libc::pid_t;
 
@@ -22,13 +19,13 @@ const METRICS_NUMBER: usize = 7;
 pub struct ProcessMetrics {
     pid: pid_t,
     descs: Vec<Desc>,
-    cpu_total: IntCounter,
-    open_fds: IntGauge,
-    max_fds: IntGauge,
-    vsize: IntGauge,
-    rss: IntGauge,
-    start_time: IntGauge,
-    threads: IntGauge,
+    cpu_total: Counter,
+    open_fds: Gauge,
+    max_fds: Gauge,
+    vsize: Gauge,
+    rss: Gauge,
+    start_time: Gauge,
+    threads: Gauge,
 }
 
 impl ProcessMetrics {
@@ -36,7 +33,7 @@ impl ProcessMetrics {
         let namespace = namespace.into();
         let mut descs = Vec::new();
 
-        let cpu_total = IntCounter::with_opts(
+        let cpu_total = Counter::with_opts(
             Opts::new(
                 "process_cpu_seconds_total",
                 "Total user and system CPU time spent in \
@@ -48,7 +45,7 @@ impl ProcessMetrics {
         
         descs.extend(cpu_total.desc().into_iter().cloned());
 
-        let open_fds = IntGauge::with_opts(
+        let open_fds = Gauge::with_opts(
             Opts::new("process_open_fds", "Number of open file descriptors.")
                 .namespace(namespace.clone()),
         )
@@ -56,7 +53,7 @@ impl ProcessMetrics {
         
         descs.extend(open_fds.desc().into_iter().cloned());
 
-        let max_fds = IntGauge::with_opts(
+        let max_fds = Gauge::with_opts(
             Opts::new(
                 "process_max_fds",
                 "Maximum number of open file descriptors.",
@@ -67,7 +64,7 @@ impl ProcessMetrics {
         
         descs.extend(max_fds.desc().into_iter().cloned());
 
-        let vsize = IntGauge::with_opts(
+        let vsize = Gauge::with_opts(
             Opts::new(
                 "process_virtual_memory_bytes",
                 "Virtual memory size in bytes.",
@@ -78,7 +75,7 @@ impl ProcessMetrics {
         
         descs.extend(vsize.desc().into_iter().cloned());
 
-        let rss = IntGauge::with_opts(
+        let rss = Gauge::with_opts(
             Opts::new(
                 "process_resident_memory_bytes",
                 "Resident memory size in bytes.",
@@ -89,7 +86,7 @@ impl ProcessMetrics {
         
         descs.extend(rss.desc().into_iter().cloned());
 
-        let start_time = IntGauge::with_opts(
+        let start_time = Gauge::with_opts(
             Opts::new(
                 "process_start_time_seconds",
                 "Start time of the process since unix epoch \
@@ -109,7 +106,7 @@ impl ProcessMetrics {
         
         descs.extend(start_time.desc().into_iter().cloned());
 
-        let threads = IntGauge::with_opts(
+        let threads = Gauge::with_opts(
             Opts::new("process_threads", "Number of OS threads in the process.")
                 .namespace(namespace),
         )

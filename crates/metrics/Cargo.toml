@@ -17,4 +17,7 @@ description = "Fuel faucet metrics"
 axum = { workspace = true }
 lazy_static = { workspace = true }
 once_cell = { workspace = true }
-prometheus-client = { workspace = true }
+
+procfs = "0.15.1"
+prometheus = "0.13.3"
+libc = "0.2"

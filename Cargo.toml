@@ -43,7 +43,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 axum = "0.5"
 lazy_static = "1.4"
 once_cell = "1.16"
-prometheus-client = "0.18"
 
 [workspace.dev-dependencies]
 fuel-core = { version = "0.17", default-features = false }
