@@ -31,7 +31,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 [dev-dependencies]
-fuel-core = { version = "0.17", default-features = false }
+fuel-core = { version = "0.17.7", default-features = false }
 fuel-core-txpool = "0.17"
 fuel-crypto = "0.26"
 fuel-types = { version = "0.26", features = ["random"] }
