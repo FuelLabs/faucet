@@ -1,4 +1,5 @@
 use fuel_core::chain_config::{ChainConfig, CoinConfig, StateConfig};
+use fuel_core::service::config::Trigger;
 use fuel_core::service::{Config as NodeConfig, FuelService};
 use fuel_crypto::SecretKey;
 use fuel_faucet::config::Config;
@@ -14,6 +15,108 @@ use rand::{Rng, SeedableRng};
 use secrecy::Secret;
 use serde_json::json;
 use std::net::SocketAddr;
+use std::time::Duration;
+
+struct TestContext {
+    #[allow(dead_code)]
+    fuel_node: FuelService,
+    faucet_config: Config,
+    provider: Provider,
+    addr: SocketAddr,
+}
+impl TestContext {
+    async fn new(mut rng: StdRng) -> Self {
+        let dispense_amount = rng.gen_range(1..10000u64);
+        let secret_key: SecretKey = rng.gen();
+        let wallet = WalletUnlocked::new_from_private_key(
+            secret_key,
+            Some(
+                Provider::connect(&SocketAddr::from(([0, 0, 0, 0], 0)).to_string())
+                    .await
+                    .unwrap(),
+            ),
+        );
+
+        // start node
+        let fuel_node = FuelService::new_node(NodeConfig {
+            chain_conf: ChainConfig {
+                initial_state: Some(StateConfig {
+                    coins: Some(vec![CoinConfig {
+                        tx_id: None,
+                        output_index: None,
+                        block_created: None,
+                        maturity: None,
+                        owner: wallet.address().into(),
+                        amount: 1 << 50,
+                        asset_id: Default::default(),
+                    }]),
+                    contracts: None,
+                    height: None,
+                    messages: None,
+                }),
+                ..ChainConfig::local_testnet()
+            },
+            block_production: Trigger::Interval {
+                block_time: Duration::from_secs(3),
+            },
+            txpool: fuel_core_txpool::Config {
+                min_gas_price: 1,
+                ..Default::default()
+            },
+            utxo_validation: true,
+            ..NodeConfig::local_node()
+        })
+        .await
+        .unwrap();
+
+        // setup provider
+        let provider = Provider::connect(&fuel_node.bound_address.to_string())
+            .await
+            .unwrap();
+
+        // start faucet
+        let faucet_config = Config {
+            service_port: 0,
+            node_url: format!("http://{}", fuel_node.bound_address),
+            wallet_secret_key: Some(Secret::new(format!("{secret_key:x}"))),
+            dispense_amount,
+            dispense_asset_id: AssetId::default(),
+            min_gas_price: 1,
+            ..Default::default()
+        };
+        let (addr, _) = start_server(faucet_config.clone()).await;
+
+        Self {
+            fuel_node,
+            faucet_config,
+            provider,
+            addr,
+        }
+    }
+}
+
+#[tokio::test]
+async fn can_start_server() {
+    let context = TestContext::new(StdRng::seed_from_u64(42)).await;
+    let addr = context.addr;
+
+    let client = reqwest::Client::new();
+
+    let response = client
+        .get(format!("http://{addr}/dispense"))
+        .send()
+        .await
+        .unwrap()
+        .json::<DispenseInfoResponse>()
+        .await
+        .expect("Invalid response body");
+
+    assert_eq!(response.amount, context.faucet_config.dispense_amount);
+    assert_eq!(
+        response.asset_id,
+        context.faucet_config.dispense_asset_id.to_string()
+    );
+}
 
 #[tokio::test]
 async fn dispense_sends_coins_to_valid_address_hex_address() {
@@ -42,82 +145,13 @@ async fn dispense_sends_coins_to_valid_address_non_hex() {
 }
 
 async fn _dispense_sends_coins_to_valid_address(
-    mut rng: StdRng,
+    rng: StdRng,
     recipient_address: Bech32Address,
     recipient_address_str: String,
 ) {
-    let dispense_amount = rng.gen_range(1..10000u64);
-    let secret_key: SecretKey = rng.gen();
-    let wallet = WalletUnlocked::new_from_private_key(
-        secret_key,
-        Some(
-            Provider::connect(&SocketAddr::from(([0, 0, 0, 0], 0)).to_string())
-                .await
-                .unwrap(),
-        ),
-    );
-
-    // start node
-    let fuel_node = FuelService::new_node(NodeConfig {
-        chain_conf: ChainConfig {
-            initial_state: Some(StateConfig {
-                coins: Some(vec![CoinConfig {
-                    tx_id: None,
-                    output_index: None,
-                    block_created: None,
-                    maturity: None,
-                    owner: wallet.address().into(),
-                    amount: 1 << 50,
-                    asset_id: Default::default(),
-                }]),
-                contracts: None,
-                height: None,
-                messages: None,
-            }),
-            ..ChainConfig::local_testnet()
-        },
-        txpool: fuel_core_txpool::Config {
-            min_gas_price: 1,
-            ..Default::default()
-        },
-        ..NodeConfig::local_node()
-    })
-    .await
-    .unwrap();
-
-    // setup provider
-    let provider = Provider::connect(&fuel_node.bound_address.to_string())
-        .await
-        .unwrap();
-
-    // start faucet
-    let faucet_config = Config {
-        service_port: 0,
-        node_url: format!("http://{}", fuel_node.bound_address),
-        wallet_secret_key: Some(Secret::new(format!("{secret_key:x}"))),
-        dispense_amount,
-        dispense_asset_id: AssetId::default(),
-        min_gas_price: 1,
-        ..Default::default()
-    };
-    let (addr, _) = start_server(faucet_config.clone()).await;
-
+    let context = TestContext::new(rng).await;
+    let addr = context.addr;
     let client = reqwest::Client::new();
-
-    let response = client
-        .get(format!("http://{addr}/dispense"))
-        .send()
-        .await
-        .unwrap()
-        .json::<DispenseInfoResponse>()
-        .await
-        .expect("Invalid response body");
-
-    assert_eq!(response.amount, faucet_config.dispense_amount);
-    assert_eq!(
-        response.asset_id,
-        faucet_config.dispense_asset_id.to_string()
-    );
 
     client
         .post(format!("http://{addr}/dispense"))
@@ -129,13 +163,63 @@ async fn _dispense_sends_coins_to_valid_address(
         .await
         .unwrap();
 
-    let test_balance: u64 = provider
-        .get_coins(&recipient_address, faucet_config.dispense_asset_id)
+    let test_balance: u64 = context
+        .provider
+        .get_coins(&recipient_address, context.faucet_config.dispense_asset_id)
         .await
         .unwrap()
         .iter()
         .map(|coin| coin.amount)
         .sum();
 
-    assert_eq!(test_balance, faucet_config.dispense_amount);
+    assert_eq!(test_balance, context.faucet_config.dispense_amount);
+}
+
+#[tokio::test]
+async fn many_concurrent_requests() {
+    let mut rng = StdRng::seed_from_u64(42);
+    let recipient_address: Address = rng.gen();
+    let recipient_address_str = format!("{}", &recipient_address);
+    let context = TestContext::new(rng).await;
+    let addr = context.addr;
+
+    let mut queries = vec![];
+    // The same as `DEFAULT_MAX_DISPENSES_PER_MINUTE`.
+    const COUNT: usize = 20;
+    for _ in 0..COUNT {
+        let recipient_address_str = recipient_address_str.clone();
+        queries.push(async move {
+            let client = reqwest::Client::new();
+            client
+                .post(format!("http://{addr}/dispense"))
+                .json(&json!({
+                    "captcha": "",
+                    "address": recipient_address_str,
+                }))
+                .send()
+                .await
+        });
+    }
+
+    let queries = futures::future::join_all(queries).await;
+
+    for query in queries {
+        query.expect("Query should be successful");
+    }
+
+    let test_balance: u64 = context
+        .provider
+        .get_coins(
+            &recipient_address.into(),
+            context.faucet_config.dispense_asset_id,
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|coin| coin.amount)
+        .sum();
+    assert_eq!(
+        test_balance,
+        COUNT as u64 * context.faucet_config.dispense_amount
+    );
 }

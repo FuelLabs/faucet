@@ -14,6 +14,7 @@ anyhow = "1.0"
 axum = "0.5"
 fuel-core-client = "0.17"
 fuel-types = "0.26"
+fuel-tx = "0.26"
 fuels-core = "0.36"
 fuels-signers = "0.36"
 fuels-types = "0.36"
@@ -31,6 +32,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 [dev-dependencies]
+futures = "0.3"
 fuel-core = { version = "0.17.7", default-features = false }
 fuel-core-txpool = "0.17"
 fuel-crypto = "0.26"

@@ -12,10 +12,13 @@ use axum::{
     BoxError, Extension, Json, Router,
 };
 use fuel_core_client::client::FuelClient;
+use fuel_tx::{ConsensusParameters, UtxoId};
 use fuel_types::Address;
 use fuels_signers::{provider::Provider, wallet::WalletUnlocked, Signer};
+use fuels_types::node_info::NodeInfo;
 use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
+use std::collections::BTreeSet;
 use std::{
     net::{SocketAddr, TcpListener},
     sync::Arc,
@@ -37,8 +40,40 @@ mod constants;
 mod recaptcha;
 mod routes;
 
+#[derive(Debug)]
+pub struct NetworkConfig {
+    pub consensus_parameters: ConsensusParameters,
+    pub node_info: NodeInfo,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct CoinOutput {
+    utxo_id: UtxoId,
+    owner: Address,
+    amount: u64,
+}
+
+#[derive(Debug)]
+pub struct FaucetState {
+    // Gas prices create the ordering for transactions.
+    pub gas_prices: BTreeSet<u64>,
+    pub last_output: Option<CoinOutput>,
+}
+
+impl FaucetState {
+    pub fn new(min_gas_price: u64, node_info: &NodeInfo) -> Self {
+        let gas_prices = (0u64..node_info.max_depth).map(|gas_price| gas_price + min_gas_price);
+        Self {
+            gas_prices: BTreeSet::from_iter(gas_prices),
+            last_output: None,
+        }
+    }
+}
+
+pub type SharedFaucetState = Arc<tokio::sync::Mutex<FaucetState>>;
 pub type SharedWallet = Arc<WalletUnlocked>;
 pub type SharedConfig = Arc<Config>;
+pub type SharedNetworkConfig = Arc<NetworkConfig>;
 
 pub async fn start_server(
     service_config: Config,
@@ -49,6 +84,21 @@ pub async fn start_server(
     let client = FuelClient::new(service_config.node_url.clone())
         .expect("unable to connect to the fuel node api");
     let provider = Provider::new(client);
+    let node_info = provider
+        .node_info()
+        .await
+        .expect("unable to get `node_info`");
+    let consensus_parameters = provider
+        .chain_info()
+        .await
+        .expect("unable to get `chain_info`")
+        .consensus_parameters;
+
+    let network_config = NetworkConfig {
+        consensus_parameters,
+        node_info,
+    };
+
     // setup wallet
     let secret = service_config
         .wallet_secret_key
@@ -98,7 +148,7 @@ pub async fn start_server(
                         service_config.max_dispenses_per_minute,
                         Duration::from_secs(60),
                     )
-                    .concurrency_limit(1)
+                    .concurrency_limit(network_config.node_info.max_depth as usize)
                     .into_inner(),
             ),
         )
@@ -111,7 +161,11 @@ pub async fn start_server(
                 .timeout(Duration::from_secs(60))
                 .layer(TraceLayer::new_for_http())
                 .layer(Extension(Arc::new(wallet)))
+                .layer(Extension(Arc::new(tokio::sync::Mutex::new(
+                    FaucetState::new(service_config.min_gas_price, &network_config.node_info),
+                ))))
                 .layer(Extension(Arc::new(service_config.clone())))
+                .layer(Extension(Arc::new(network_config)))
                 .layer(
                     CorsLayer::new()
                         .allow_origin(Any)
