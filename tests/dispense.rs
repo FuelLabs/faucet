@@ -4,7 +4,7 @@ use fuel_core::service::{Config as NodeConfig, FuelService};
 use fuel_crypto::SecretKey;
 use fuel_faucet::config::Config;
 use fuel_faucet::models::DispenseInfoResponse;
-use fuel_faucet::start_server;
+use fuel_faucet::{start_server, THE_BIGGEST_AMOUNT};
 use fuel_types::{Address, AssetId};
 use fuels_signers::provider::Provider;
 use fuels_signers::wallet::WalletUnlocked;
@@ -46,7 +46,7 @@ impl TestContext {
                     block_created: None,
                     maturity: None,
                     owner: wallet.address().into(),
-                    amount: 1,
+                    amount: THE_BIGGEST_AMOUNT - 1,
                     asset_id: Default::default(),
                 }
             })

@@ -26,7 +26,7 @@ use std::{
 use tracing::{error, info};
 
 // The amount to fetch the biggest input of the faucet.
-const THE_BIGGEST_AMOUNT: u64 = (u32::MAX as u64) >> 4;
+pub const THE_BIGGEST_AMOUNT: u64 = u32::MAX as u64;
 
 lazy_static::lazy_static! {
     static ref START_TIME: u64 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
@@ -155,11 +155,7 @@ pub async fn dispense_tokens(
                 .client
                 .resources_to_spend(
                     &wallet.address().hash().to_string(),
-                    vec![(
-                        AssetId::BASE.to_string().as_str(),
-                        THE_BIGGEST_AMOUNT,
-                        Some(1),
-                    )],
+                    vec![(AssetId::BASE.to_string().as_str(), THE_BIGGEST_AMOUNT, None)],
                     None,
                 )
                 .await

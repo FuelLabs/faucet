@@ -39,6 +39,8 @@ mod constants;
 mod recaptcha;
 mod routes;
 
+pub use routes::THE_BIGGEST_AMOUNT;
+
 #[derive(Debug)]
 pub struct NetworkConfig {
     pub consensus_parameters: ConsensusParameters,
