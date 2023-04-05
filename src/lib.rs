@@ -18,7 +18,6 @@ use fuels_signers::{provider::Provider, wallet::WalletUnlocked, Signer};
 use fuels_types::node_info::NodeInfo;
 use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
-use std::collections::BTreeSet;
 use std::{
     net::{SocketAddr, TcpListener},
     sync::Arc,
@@ -55,18 +54,30 @@ pub struct CoinOutput {
 
 #[derive(Debug)]
 pub struct FaucetState {
+    min_gas_price: u64,
+    max_depth: u64,
     // Gas prices create the ordering for transactions.
-    pub gas_prices: BTreeSet<u64>,
+    next_gas_price: u64,
     pub last_output: Option<CoinOutput>,
 }
 
 impl FaucetState {
     pub fn new(min_gas_price: u64, node_info: &NodeInfo) -> Self {
-        let gas_prices = (0u64..node_info.max_depth).map(|gas_price| gas_price + min_gas_price);
         Self {
-            gas_prices: BTreeSet::from_iter(gas_prices),
+            min_gas_price,
+            max_depth: node_info.max_depth,
+            next_gas_price: 0,
             last_output: None,
         }
+    }
+
+    pub fn next_gas_price(&mut self) -> u64 {
+        if self.next_gas_price <= self.min_gas_price {
+            self.next_gas_price = self.max_depth * 100 + self.min_gas_price;
+        }
+        let next_gas_price = self.next_gas_price;
+        self.next_gas_price -= 1;
+        next_gas_price
     }
 }
 

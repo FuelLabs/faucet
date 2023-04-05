@@ -17,6 +17,7 @@ use handlebars::Handlebars;
 use reqwest::StatusCode;
 use secrecy::ExposeSecret;
 use serde_json::json;
+use std::time::Duration;
 use std::{
     collections::BTreeMap,
     str::FromStr,
@@ -145,7 +146,7 @@ pub async fn dispense_tokens(
         .get_provider()
         .map_err(|e| error(format!("Failed to get provider with error: {}", e)))?;
 
-    let (tx, gas_price) = {
+    let tx = {
         let mut guard = state.lock().await;
         let coin_output = if let Some(previous_coin_output) = &guard.last_output {
             *previous_coin_output
@@ -187,10 +188,7 @@ pub async fn dispense_tokens(
             config.dispense_amount,
         );
 
-        let gas_price = *guard
-            .gas_prices
-            .last()
-            .expect("The count of gas prices more than concurrent transactions");
+        let gas_price = guard.next_gas_price();
 
         let mut tx = Wallet::build_transfer_tx(
             &inputs,
@@ -217,28 +215,31 @@ pub async fn dispense_tokens(
             owner: coin_output.owner,
             amount: coin_output.amount - total_fee - config.dispense_amount,
         });
-        guard.gas_prices.pop_last();
 
-        (tx, gas_price)
+        tx
     };
 
-    let result = provider
-        .client
-        .submit_and_await_commit(&tx.into())
-        .await
-        .map_err(|e| error(format!("Failed to submit transaction with error: {}", e)));
-
-    // Returns gas price back to make it available for others.
-    let mut guard = state.lock().await;
-    guard.gas_prices.insert(gas_price);
+    let result = tokio::time::timeout(
+        Duration::from_secs(config.timeout),
+        provider.client.submit_and_await_commit(&tx.into()),
+    )
+    .await
+    .map_err(|e| {
+        error(format!(
+            "Got a timeout during transaction submission: {}",
+            e
+        ))
+    });
 
     match result {
-        Ok(TransactionStatus::Success { .. }) => {}
+        Ok(Ok(TransactionStatus::Success { .. })) => {}
         _ => {
+            let mut guard = state.lock().await;
             // If the transaction is not committed or we get an error
             // then we invalidate the state to start from the beginning
             guard.last_output = None;
-            result?;
+            result?
+                .map_err(|e| error(format!("Failed to submit transaction with error: {}", e)))?;
         }
     };
 

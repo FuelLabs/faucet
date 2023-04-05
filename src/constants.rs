@@ -22,6 +22,7 @@ pub const DEFAULT_PORT: u16 = 3000;
 pub const MAX_DISPENSES_PER_MINUTE: &str = "MAX_DISPENSES_PER_MINUTE";
 pub const DEFAULT_MAX_DISPENSES_PER_MINUTE: &str = "20";
 pub const MIN_GAS_PRICE: &str = "MIN_GAS_PRICE";
+pub const TIMEOUT_SECONDS: &str = "TIMEOUT_SECONDS";
 
 // HTTP config
 
