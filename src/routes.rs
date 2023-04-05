@@ -7,7 +7,6 @@ use axum::{
     Extension, Json,
 };
 use fuel_core_client::client::schema::resource::Resource;
-use fuel_core_client::client::types::TransactionStatus;
 use fuel_tx::{Input, TransactionFee, UniqueIdentifier, UtxoId};
 use fuel_types::{Address, AssetId};
 use fuels_core::parameters::TxParameters;
@@ -146,7 +145,9 @@ pub async fn dispense_tokens(
         .get_provider()
         .map_err(|e| error(format!("Failed to get provider with error: {}", e)))?;
 
-    let tx = {
+    let mut tx;
+
+    loop {
         let mut guard = state.lock().await;
         let coin_output = if let Some(previous_coin_output) = &guard.last_output {
             *previous_coin_output
@@ -173,6 +174,7 @@ pub async fn dispense_tokens(
                 .last()
                 .expect("The wallet is empty")
         };
+
         let inputs = vec![Input::coin_signed(
             coin_output.utxo_id,
             coin_output.owner,
@@ -190,7 +192,7 @@ pub async fn dispense_tokens(
 
         let gas_price = guard.next_gas_price();
 
-        let mut tx = Wallet::build_transfer_tx(
+        let mut script = Wallet::build_transfer_tx(
             &inputs,
             &outputs,
             TxParameters {
@@ -199,15 +201,16 @@ pub async fn dispense_tokens(
             },
         );
         wallet
-            .sign_transaction(&mut tx)
+            .sign_transaction(&mut script)
             .await
             .map_err(|e| error(format!("Failed to sign transaction: {}", e)))?;
 
-        let total_fee = TransactionFee::checked_from_tx(&network_config.consensus_parameters, &tx)
-            .expect("Can't overflow with transfer transaction")
-            .total();
+        let total_fee =
+            TransactionFee::checked_from_tx(&network_config.consensus_parameters, &script)
+                .expect("Can't overflow with transfer transaction")
+                .total();
 
-        let tx = tx.into();
+        tx = script.into();
         let result = tokio::time::timeout(
             Duration::from_secs(config.timeout),
             provider.client.submit(&tx),
@@ -228,17 +231,15 @@ pub async fn dispense_tokens(
                     owner: coin_output.owner,
                     amount: coin_output.amount - total_fee - config.dispense_amount,
                 });
+                break;
             }
             _ => {
                 guard.last_output = None;
-                result??;
             }
         };
+    }
 
-        tx
-    };
-
-    let result = tokio::time::timeout(
+    tokio::time::timeout(
         Duration::from_secs(config.timeout),
         provider
             .client
@@ -251,18 +252,7 @@ pub async fn dispense_tokens(
             "Got a timeout during transaction submission: {}",
             e
         ))
-    });
-
-    match result {
-        Ok(Ok(TransactionStatus::Success { .. })) => {}
-        _ => {
-            let mut guard = state.lock().await;
-            // If the transaction is not committed or we get an error
-            // then we invalidate the state to start from the beginning
-            guard.last_output = None;
-            result??;
-        }
-    };
+    })??;
 
     info!(
         "dispensed {} tokens to {:#x}",
