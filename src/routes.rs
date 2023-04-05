@@ -159,13 +159,7 @@ pub async fn dispense_tokens(
                     None,
                 )
                 .await
-                .map_err(|e| {
-                    error!("failed to get resources: {}", e);
-                    DispenseError {
-                        error: "Failed to get resources".to_string(),
-                        status: StatusCode::INTERNAL_SERVER_ERROR,
-                    }
-                })?
+                .map_err(|e| error(format!("Failed to get resources: {}", e)))?
                 .into_iter()
                 .flatten()
                 .filter_map(|resource| match resource {
@@ -204,32 +198,54 @@ pub async fn dispense_tokens(
                 ..Default::default()
             },
         );
-        wallet.sign_transaction(&mut tx).await.map_err(|e| {
-            error!("failed to sign transaction: {}", e);
-            DispenseError {
-                error: "Failed to sign transaction".to_string(),
-                status: StatusCode::INTERNAL_SERVER_ERROR,
-            }
-        })?;
+        wallet
+            .sign_transaction(&mut tx)
+            .await
+            .map_err(|e| error(format!("Failed to sign transaction: {}", e)))?;
 
         let total_fee = TransactionFee::checked_from_tx(&network_config.consensus_parameters, &tx)
             .expect("Can't overflow with transfer transaction")
             .total();
 
-        guard.last_output = Some(CoinOutput {
-            utxo_id: UtxoId::new(tx.id(), 1),
-            owner: coin_output.owner,
-            amount: coin_output.amount - total_fee - config.dispense_amount,
+        let tx = tx.into();
+        let result = tokio::time::timeout(
+            Duration::from_secs(config.timeout),
+            provider.client.submit(&tx),
+        )
+        .await
+        .map(|r| r.map_err(|e| error(format!("Failed to submit transaction: {}", e))))
+        .map_err(|e| {
+            error(format!(
+                "Timeout during while submitting transaction: {}",
+                e
+            ))
         });
+
+        match result {
+            Ok(Ok(_)) => {
+                guard.last_output = Some(CoinOutput {
+                    utxo_id: UtxoId::new(tx.id(), 1),
+                    owner: coin_output.owner,
+                    amount: coin_output.amount - total_fee - config.dispense_amount,
+                });
+            }
+            _ => {
+                guard.last_output = None;
+                result??;
+            }
+        };
 
         tx
     };
 
     let result = tokio::time::timeout(
         Duration::from_secs(config.timeout),
-        provider.client.submit_and_await_commit(&tx.into()),
+        provider
+            .client
+            .await_transaction_commit(tx.id().to_string().as_str()),
     )
     .await
+    .map(|r| r.map_err(|e| error(format!("Failed to submit transaction with error: {}", e))))
     .map_err(|e| {
         error(format!(
             "Got a timeout during transaction submission: {}",
@@ -244,8 +260,7 @@ pub async fn dispense_tokens(
             // If the transaction is not committed or we get an error
             // then we invalidate the state to start from the beginning
             guard.last_output = None;
-            result?
-                .map_err(|e| error(format!("Failed to submit transaction with error: {}", e)))?;
+            result??;
         }
     };
 
