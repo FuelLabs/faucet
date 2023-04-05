@@ -6,13 +6,13 @@ use axum::{
     response::{Html, IntoResponse, Response},
     Extension, Json,
 };
+use fuel_core_client::client::schema::resource::Resource;
 use fuel_core_client::client::types::TransactionStatus;
 use fuel_tx::{Input, TransactionFee, UniqueIdentifier, UtxoId};
 use fuel_types::{Address, AssetId};
 use fuels_core::parameters::TxParameters;
 use fuels_signers::{Signer, Wallet};
 use fuels_types::bech32::Bech32Address;
-use fuels_types::resource::Resource;
 use handlebars::Handlebars;
 use reqwest::StatusCode;
 use secrecy::ExposeSecret;
@@ -151,8 +151,17 @@ pub async fn dispense_tokens(
         let coin_output = if let Some(previous_coin_output) = &guard.last_output {
             *previous_coin_output
         } else {
-            wallet
-                .get_spendable_resources(AssetId::BASE, THE_BIGGEST_AMOUNT)
+            provider
+                .client
+                .resources_to_spend(
+                    &wallet.address().hash().to_string(),
+                    vec![(
+                        AssetId::BASE.to_string().as_str(),
+                        THE_BIGGEST_AMOUNT,
+                        Some(1),
+                    )],
+                    None,
+                )
                 .await
                 .map_err(|e| {
                     error!("failed to get resources: {}", e);
@@ -162,13 +171,14 @@ pub async fn dispense_tokens(
                     }
                 })?
                 .into_iter()
+                .flatten()
                 .filter_map(|resource| match resource {
                     Resource::Coin(coin) => Some(CoinOutput {
-                        utxo_id: coin.utxo_id,
+                        utxo_id: coin.utxo_id.into(),
                         owner: coin.owner.into(),
-                        amount: coin.amount,
+                        amount: coin.amount.into(),
                     }),
-                    Resource::Message(_) => None,
+                    _ => None,
                 })
                 .last()
                 .expect("The wallet is empty")

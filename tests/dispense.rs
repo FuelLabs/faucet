@@ -37,19 +37,36 @@ impl TestContext {
             ),
         );
 
+        let mut coins: Vec<_> = (0..10000)
+            .map(|_| {
+                // dust
+                CoinConfig {
+                    tx_id: None,
+                    output_index: None,
+                    block_created: None,
+                    maturity: None,
+                    owner: wallet.address().into(),
+                    amount: 1,
+                    asset_id: Default::default(),
+                }
+            })
+            .collect();
+        // main coin
+        coins.push(CoinConfig {
+            tx_id: None,
+            output_index: None,
+            block_created: None,
+            maturity: None,
+            owner: wallet.address().into(),
+            amount: 1 << 50,
+            asset_id: Default::default(),
+        });
+
         // start node
         let fuel_node = FuelService::new_node(NodeConfig {
             chain_conf: ChainConfig {
                 initial_state: Some(StateConfig {
-                    coins: Some(vec![CoinConfig {
-                        tx_id: None,
-                        output_index: None,
-                        block_created: None,
-                        maturity: None,
-                        owner: wallet.address().into(),
-                        amount: 1 << 50,
-                        asset_id: Default::default(),
-                    }]),
+                    coins: Some(coins),
                     contracts: None,
                     height: None,
                     messages: None,
