@@ -13,6 +13,7 @@ description = "A token faucet for onboarding fuel users"
 anyhow = "1.0"
 axum = "0.5"
 fuel-core-client = "0.17"
+fuel-tx = "0.26"
 fuel-types = "0.26"
 fuels-core = "0.36"
 fuels-signers = "0.36"
@@ -35,6 +36,7 @@ fuel-core = { version = "0.17.7", default-features = false }
 fuel-core-txpool = "0.17"
 fuel-crypto = "0.26"
 fuel-types = { version = "0.26", features = ["random"] }
+futures = "0.3"
 insta = "1.14"
 rand = "0.8"
 

@@ -1,21 +1,31 @@
-use crate::{models::*, recaptcha, SharedConfig, SharedWallet};
+use crate::{
+    models::*, recaptcha, CoinOutput, SharedConfig, SharedFaucetState, SharedNetworkConfig,
+    SharedWallet,
+};
 use axum::{
     response::{Html, IntoResponse, Response},
     Extension, Json,
 };
-use fuel_types::Address;
+use fuel_core_client::client::schema::resource::Resource;
+use fuel_tx::{Input, TransactionFee, UniqueIdentifier, UtxoId};
+use fuel_types::{Address, AssetId};
 use fuels_core::parameters::TxParameters;
+use fuels_signers::{Signer, Wallet};
 use fuels_types::bech32::Bech32Address;
 use handlebars::Handlebars;
 use reqwest::StatusCode;
 use secrecy::ExposeSecret;
 use serde_json::json;
+use std::time::Duration;
 use std::{
     collections::BTreeMap,
     str::FromStr,
     time::{SystemTime, UNIX_EPOCH},
 };
 use tracing::{error, info};
+
+// The amount to fetch the biggest input of the faucet.
+pub const THE_BIGGEST_AMOUNT: u64 = u32::MAX as u64;
 
 lazy_static::lazy_static! {
     static ref START_TIME: u64 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
@@ -102,7 +112,9 @@ impl IntoResponse for DispenseInfoResponse {
 pub async fn dispense_tokens(
     Json(input): Json<DispenseInput>,
     Extension(wallet): Extension<SharedWallet>,
+    Extension(state): Extension<SharedFaucetState>,
     Extension(config): Extension<SharedConfig>,
+    Extension(network_config): Extension<SharedNetworkConfig>,
 ) -> Result<DispenseResponse, DispenseError> {
     // parse deposit address
     let address = if let Ok(address) = Address::from_str(input.address.as_str()) {
@@ -129,25 +141,118 @@ pub async fn dispense_tokens(
             })?;
     }
 
-    // transfer tokens
-    wallet
-        .transfer(
-            &address.into(),
-            config.dispense_amount,
+    let provider = wallet
+        .get_provider()
+        .map_err(|e| error(format!("Failed to get provider with error: {}", e)))?;
+
+    let mut tx;
+
+    loop {
+        let mut guard = state.lock().await;
+        let coin_output = if let Some(previous_coin_output) = &guard.last_output {
+            *previous_coin_output
+        } else {
+            provider
+                .client
+                .resources_to_spend(
+                    &wallet.address().hash().to_string(),
+                    vec![(AssetId::BASE.to_string().as_str(), THE_BIGGEST_AMOUNT, None)],
+                    None,
+                )
+                .await
+                .map_err(|e| error(format!("Failed to get resources: {}", e)))?
+                .into_iter()
+                .flatten()
+                .filter_map(|resource| match resource {
+                    Resource::Coin(coin) => Some(CoinOutput {
+                        utxo_id: coin.utxo_id.into(),
+                        owner: coin.owner.into(),
+                        amount: coin.amount.into(),
+                    }),
+                    _ => None,
+                })
+                .last()
+                .expect("The wallet is empty")
+        };
+
+        let inputs = vec![Input::coin_signed(
+            coin_output.utxo_id,
+            coin_output.owner,
+            coin_output.amount,
             config.dispense_asset_id,
+            Default::default(),
+            0,
+            Default::default(),
+        )];
+        let outputs = wallet.get_asset_outputs_for_amount(
+            &address.into(),
+            config.dispense_asset_id,
+            config.dispense_amount,
+        );
+
+        let gas_price = guard.next_gas_price();
+
+        let mut script = Wallet::build_transfer_tx(
+            &inputs,
+            &outputs,
             TxParameters {
-                gas_price: config.min_gas_price,
+                gas_price,
                 ..Default::default()
             },
+        );
+        wallet
+            .sign_transaction(&mut script)
+            .await
+            .map_err(|e| error(format!("Failed to sign transaction: {}", e)))?;
+
+        let total_fee =
+            TransactionFee::checked_from_tx(&network_config.consensus_parameters, &script)
+                .expect("Can't overflow with transfer transaction")
+                .total();
+
+        tx = script.into();
+        let result = tokio::time::timeout(
+            Duration::from_secs(config.timeout),
+            provider.client.submit(&tx),
         )
         .await
+        .map(|r| r.map_err(|e| error(format!("Failed to submit transaction: {}", e))))
         .map_err(|e| {
-            error!("failed to transfer: {}", e);
-            DispenseError {
-                error: "Failed to transfer".to_string(),
-                status: StatusCode::INTERNAL_SERVER_ERROR,
+            error(format!(
+                "Timeout during while submitting transaction: {}",
+                e
+            ))
+        });
+
+        match result {
+            Ok(Ok(_)) => {
+                guard.last_output = Some(CoinOutput {
+                    utxo_id: UtxoId::new(tx.id(), 1),
+                    owner: coin_output.owner,
+                    amount: coin_output.amount - total_fee - config.dispense_amount,
+                });
+                break;
             }
-        })?;
+            _ => {
+                guard.last_output = None;
+            }
+        };
+    }
+
+    tokio::time::timeout(
+        Duration::from_secs(config.timeout),
+        provider
+            .client
+            .await_transaction_commit(tx.id().to_string().as_str()),
+    )
+    .await
+    .map(|r| r.map_err(|e| error(format!("Failed to submit transaction with error: {}", e))))
+    .map_err(|e| {
+        error(format!(
+            "Got a timeout during transaction submission: {}",
+            e
+        ))
+    })??;
 
     info!(
         "dispensed {} tokens to {:#x}",
@@ -168,4 +273,12 @@ pub async fn dispense_info(
         amount: config.dispense_amount,
         asset_id: config.dispense_asset_id.to_string(),
     })
+}
+
+fn error(error: String) -> DispenseError {
+    error!("{}", error);
+    DispenseError {
+        error,
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+    }
 }
