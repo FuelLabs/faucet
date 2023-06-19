@@ -35,8 +35,7 @@ impl Default for Config {
                 .unwrap_or(DEFAULT_PORT),
             captcha_secret: env::var_os(CAPTCHA_SECRET)
                 .map(|s| Secret::new(s.into_string().unwrap())),
-            captcha_key: env::var_os(CAPTCHA_KEY)
-                .map(|s| s.into_string().unwrap()),
+            captcha_key: env::var_os(CAPTCHA_KEY).map(|s| s.into_string().unwrap()),
             node_url: env::var(FUEL_NODE_URL).unwrap_or_else(|_| DEFAULT_NODE_URL.to_string()),
             public_node_url: env::var(PUBLIC_FUEL_NODE_URL)
                 .unwrap_or_else(|_| DEFAULT_NODE_URL.to_string()),
