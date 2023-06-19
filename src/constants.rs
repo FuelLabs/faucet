@@ -2,6 +2,7 @@ use fuel_types::AssetId;
 
 pub const LOG_FILTER: &str = "RUST_LOG";
 pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
+pub const CAPTCHA_KEY: &str = "CAPTCHA_KEY";
 pub const CAPTCHA_SECRET: &str = "CAPTCHA_SECRET";
 pub const WALLET_SECRET_KEY: &str = "WALLET_SECRET_KEY";
 pub const PUBLIC_FUEL_NODE_URL: &str = "PUBLIC_FUEL_NODE_URL";
