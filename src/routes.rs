@@ -41,10 +41,10 @@ pub fn render_page(public_node_url: String, captcha_key: Option<String>) -> Stri
         .unwrap();
     let mut data = BTreeMap::new();
     data.insert("page_title", "Fuel Faucet");
-    data.insert("public_node_url", &public_node_url.as_str());
+    data.insert("public_node_url", public_node_url.as_str());
     // if captcha is enabled, add captcha key
     if let Some(captcha_key) = &captcha_key {
-        data.insert("captcha_key", &captcha_key.as_str());
+        data.insert("captcha_key", captcha_key.as_str());
     }
     // render page
     handlebars.render("index", &data).unwrap()
