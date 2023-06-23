@@ -14,6 +14,7 @@ The faucet makes use of environment variables for configuration.
 | RUST_LOG             | EnvFilter configuration for adjusting logging granularity.              |
 | HUMAN_LOGGING        | If false, logs will be output as machine readable JSON.                 |
 | CAPTCHA_SECRET       | The secret key used for enabling Google captcha authentication.         |
+| CAPTCHA_KEY          | The website key used for enabling Google captcha authentication.        |
 | WALLET_SECRET_KEY    | A hex formatted string of the wallet private key that owns some tokens. |
 | FUEL_NODE_URL        | The GraphQL endpoint for connecting to fuel-core.                       |
 | PUBLIC_FUEL_NODE_URL | The public GraphQL endpoint for connecting to fuel-core. Ex.: https://node.fuel.network/graphql |

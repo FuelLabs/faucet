@@ -217,12 +217,14 @@
           <b class="bold">Test Fuel network</b>. This faucet sends fake Ether
           assets to the provided wallet address.
         </p>
-        <div class="captcha-container">
-          <div
-            class="g-recaptcha"
-            data-sitekey="6Ld3cEwfAAAAAMd4QTs7aO85LyKGdgj0bFsdBfre"
-          ></div>
-        </div>
+        {{#if captcha_key}}
+          <div class="captcha-container">
+            <div
+              class="g-recaptcha"
+              data-sitekey="{{ captcha_key }}"
+            ></div>
+          </div>
+        {{/if}}
         <div class="queued hidden">
           <div class="loader"></div>
           <div>Waiting until more tokens are available</div>
@@ -251,21 +253,36 @@
           }
         }
 
+        function hasCaptcha() {
+          return !!document.getElementsByClassName("captcha-container")[0];
+        }
+
         function showWaiting() {
-          document.getElementsByClassName("captcha-container")[0].classList.add("hidden");
+          if (hasCaptcha()) {
+            document.getElementsByClassName("captcha-container")[0].classList.add("hidden");
+          }
           document.getElementsByClassName("queued")[0].classList.remove("hidden");
           form.querySelector("input[type=submit]").disabled = true;
         }
 
         function hideWaiting() {
-          document.getElementsByClassName("captcha-container")[0].classList.remove("hidden");
+          if (hasCaptcha()) {
+            document.getElementsByClassName("captcha-container")[0].classList.remove("hidden");
+          }
           document.getElementsByClassName("queued")[0].classList.add("hidden");
           form.querySelector("input[type=submit]").disabled = false;
         }
 
         function give_me_coins(form) {
-          let address = form["address"].value;
-          let captcha = form["g-recaptcha-response"].value;
+          const data = {
+            address: form["address"].value,
+            captcha: "",
+          };
+
+          if (hasCaptcha()) {
+            data.captcha = form["g-recaptcha-response"].value;
+          }
+
           let xhr = new XMLHttpRequest();
           xhr.open("POST", "/dispense");
           xhr.setRequestHeader("Accept", "application/json");
@@ -274,11 +291,6 @@
             handle_response(address)(JSON.parse(xhr.responseText));
           xhr.onetimeout = () => handle_error("Connection to the server timed out");
           xhr.onerror = () => handle_error("Connection to the server failed");
-
-          let data = {
-            address,
-            captcha,
-          };
           xhr.send(JSON.stringify(data));
 
           document.getElementById("response-failure").innerText = "";

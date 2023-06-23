@@ -62,6 +62,10 @@ spec:
               value: "{{ .Values.app.target_port }}"
             - name: WALLET_SECRET_KEY
               value: "{{ .Values.app.wallet_secret_key }}"
+          {{- if .Values.app.captcha_key }}
+            - name: CAPTCHA_KEY
+              value: "{{ .Values.app.captcha_key }}"
+          {{- end }}
           {{- if .Values.app.captcha_secret }}
             - name: CAPTCHA_SECRET
               value: "{{ .Values.app.captcha_secret }}"

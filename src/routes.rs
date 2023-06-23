@@ -32,7 +32,7 @@ lazy_static::lazy_static! {
 }
 
 #[memoize::memoize]
-pub fn render_page(public_node_url: String) -> String {
+pub fn render_page(public_node_url: String, captcha_key: Option<String>) -> String {
     let template = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
     // sub in values
     let mut handlebars = Handlebars::new();
@@ -42,13 +42,18 @@ pub fn render_page(public_node_url: String) -> String {
     let mut data = BTreeMap::new();
     data.insert("page_title", "Fuel Faucet");
     data.insert("public_node_url", public_node_url.as_str());
+    // if captcha is enabled, add captcha key
+    if let Some(captcha_key) = &captcha_key {
+        data.insert("captcha_key", captcha_key.as_str());
+    }
     // render page
     handlebars.render("index", &data).unwrap()
 }
 
 pub async fn main(Extension(config): Extension<SharedConfig>) -> Html<String> {
     let public_node_url = config.public_node_url.clone();
-    Html(render_page(public_node_url))
+    let captcha_key = config.captcha_key.clone();
+    Html(render_page(public_node_url, captcha_key))
 }
 
 #[tracing::instrument(skip(wallet))]

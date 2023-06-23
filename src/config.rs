@@ -1,5 +1,5 @@
 use crate::constants::{
-    CAPTCHA_SECRET, DEFAULT_FAUCET_DISPENSE_AMOUNT, DEFAULT_MAX_DISPENSES_PER_MINUTE,
+    CAPTCHA_KEY, CAPTCHA_SECRET, DEFAULT_FAUCET_DISPENSE_AMOUNT, DEFAULT_MAX_DISPENSES_PER_MINUTE,
     DEFAULT_NODE_URL, DEFAULT_PORT, DISPENSE_AMOUNT, FAUCET_ASSET_ID, FUEL_NODE_URL, HUMAN_LOGGING,
     LOG_FILTER, MAX_DISPENSES_PER_MINUTE, MIN_GAS_PRICE, PUBLIC_FUEL_NODE_URL, SERVICE_PORT,
     TIMEOUT_SECONDS, WALLET_SECRET_KEY,
@@ -13,6 +13,7 @@ pub struct Config {
     pub log_filter: String,
     pub human_logging: bool,
     pub service_port: u16,
+    pub captcha_key: Option<String>,
     pub captcha_secret: Option<Secret<String>>,
     pub node_url: String,
     pub public_node_url: String,
@@ -34,6 +35,7 @@ impl Default for Config {
                 .unwrap_or(DEFAULT_PORT),
             captcha_secret: env::var_os(CAPTCHA_SECRET)
                 .map(|s| Secret::new(s.into_string().unwrap())),
+            captcha_key: env::var_os(CAPTCHA_KEY).map(|s| s.into_string().unwrap()),
             node_url: env::var(FUEL_NODE_URL).unwrap_or_else(|_| DEFAULT_NODE_URL.to_string()),
             public_node_url: env::var(PUBLIC_FUEL_NODE_URL)
                 .unwrap_or_else(|_| DEFAULT_NODE_URL.to_string()),
