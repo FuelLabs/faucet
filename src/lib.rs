@@ -14,8 +14,8 @@ use axum::{
 use fuel_core_client::client::FuelClient;
 use fuel_tx::{ConsensusParameters, UtxoId};
 use fuel_types::Address;
-use fuels_signers::{provider::Provider, wallet::WalletUnlocked, Signer};
-use fuels_types::node_info::NodeInfo;
+use fuels_accounts::{provider::Provider, wallet::WalletUnlocked, ViewOnlyAccount};
+use fuels_core::types::node_info::NodeInfo;
 use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
 use std::{
@@ -96,16 +96,14 @@ pub async fn start_server(
     // connect to the fuel node
     let client = FuelClient::new(service_config.node_url.clone())
         .expect("unable to connect to the fuel node api");
-    let provider = Provider::new(client);
+
+    let consensus_parameters = Default::default();
+    let provider = Provider::new(client, consensus_parameters);
+
     let node_info = provider
         .node_info()
         .await
         .expect("unable to get `node_info`");
-    let consensus_parameters = provider
-        .chain_info()
-        .await
-        .expect("unable to get `chain_info`")
-        .consensus_parameters;
 
     let network_config = NetworkConfig {
         consensus_parameters,
@@ -131,7 +129,7 @@ pub async fn start_server(
         .expect("Failed to fetch initial balance from fuel core")
         .into_iter()
         .filter_map(|coin| match coin.status {
-            fuels_types::coin::CoinStatus::Unspent => Some(coin.amount),
+            fuels_core::types::coin::CoinStatus::Unspent => Some(coin.amount),
             _ => None,
         })
         .sum::<u64>();

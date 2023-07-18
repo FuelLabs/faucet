@@ -6,12 +6,20 @@ use axum::{
     response::{Html, IntoResponse, Response},
     Extension, Json,
 };
-use fuel_core_client::client::schema::resource::Resource;
-use fuel_tx::{Input, TransactionFee, UniqueIdentifier, UtxoId};
+
+use fuel_tx::{TransactionFee, UniqueIdentifier, UtxoId};
 use fuel_types::{Address, AssetId};
-use fuels_core::parameters::TxParameters;
-use fuels_signers::{Signer, Wallet};
-use fuels_types::bech32::Bech32Address;
+use fuels_accounts::{Account, Signer};
+use fuels_core::types::{
+    bech32::Bech32Address,
+    coin::{Coin, CoinStatus},
+    coin_type::CoinType,
+    transaction::TxParameters,
+};
+use fuels_core::types::{
+    input::Input,
+    transaction_builders::{ScriptTransactionBuilder, TransactionBuilder},
+};
 use handlebars::Handlebars;
 use reqwest::StatusCode;
 use secrecy::ExposeSecret;
@@ -60,7 +68,7 @@ pub async fn main(Extension(config): Extension<SharedConfig>) -> Html<String> {
 pub async fn health(Extension(wallet): Extension<SharedWallet>) -> Response {
     // ping client for health
     let client = wallet
-        .get_provider()
+        .provider()
         .expect("client provider")
         .client
         .health()
@@ -146,9 +154,7 @@ pub async fn dispense_tokens(
             })?;
     }
 
-    let provider = wallet
-        .get_provider()
-        .map_err(|e| error(format!("Failed to get provider with error: {}", e)))?;
+    let provider = wallet.provider().expect("client provider");
 
     let mut tx;
 
@@ -159,7 +165,7 @@ pub async fn dispense_tokens(
         } else {
             provider
                 .client
-                .resources_to_spend(
+                .coins_to_spend(
                     &wallet.address().hash().to_string(),
                     vec![(AssetId::BASE.to_string().as_str(), THE_BIGGEST_AMOUNT, None)],
                     None,
@@ -169,26 +175,31 @@ pub async fn dispense_tokens(
                 .into_iter()
                 .flatten()
                 .filter_map(|resource| match resource {
-                    Resource::Coin(coin) => Some(CoinOutput {
-                        utxo_id: coin.utxo_id.into(),
-                        owner: coin.owner.into(),
-                        amount: coin.amount.into(),
-                    }),
+                    fuel_core_client::client::schema::coins::CoinType::Coin(coin) => {
+                        Some(CoinOutput {
+                            utxo_id: coin.utxo_id.into(),
+                            owner: coin.owner.into(),
+                            amount: coin.amount.into(),
+                        })
+                    }
                     _ => None,
                 })
                 .last()
                 .expect("The wallet is empty")
         };
 
-        let inputs = vec![Input::coin_signed(
-            coin_output.utxo_id,
-            coin_output.owner,
-            coin_output.amount,
-            config.dispense_asset_id,
-            Default::default(),
-            0,
-            Default::default(),
-        )];
+        let coin_type = CoinType::Coin(Coin {
+            amount: coin_output.amount,
+            block_created: 0u32,
+            asset_id: config.dispense_asset_id,
+            utxo_id: coin_output.utxo_id,
+            maturity: 0u32,
+            owner: coin_output.owner.into(),
+            status: CoinStatus::Unspent,
+        });
+
+        let inputs = vec![Input::resource_signed(coin_type, 0)];
+
         let outputs = wallet.get_asset_outputs_for_amount(
             &address.into(),
             config.dispense_asset_id,
@@ -197,21 +208,20 @@ pub async fn dispense_tokens(
 
         let gas_price = guard.next_gas_price();
 
-        let mut script = Wallet::build_transfer_tx(
-            &inputs,
-            &outputs,
-            TxParameters {
-                gas_price,
-                ..Default::default()
-            },
-        );
+        let mut script = ScriptTransactionBuilder::prepare_transfer(
+            inputs,
+            outputs,
+            TxParameters::default().set_gas_price(gas_price),
+        )
+        .build()
+        .expect("valid script");
+
         wallet
             .sign_transaction(&mut script)
-            .await
             .map_err(|e| error(format!("Failed to sign transaction: {}", e)))?;
 
         let total_fee =
-            TransactionFee::checked_from_tx(&network_config.consensus_parameters, &script)
+            TransactionFee::checked_from_tx(&network_config.consensus_parameters, &script.tx)
                 .expect("Can't overflow with transfer transaction")
                 .total();
 
@@ -232,7 +242,7 @@ pub async fn dispense_tokens(
         match result {
             Ok(Ok(_)) => {
                 guard.last_output = Some(CoinOutput {
-                    utxo_id: UtxoId::new(tx.id(), 1),
+                    utxo_id: UtxoId::new(tx.id(&network_config.consensus_parameters), 1),
                     owner: coin_output.owner,
                     amount: coin_output.amount - total_fee - config.dispense_amount,
                 });
@@ -246,9 +256,11 @@ pub async fn dispense_tokens(
 
     tokio::time::timeout(
         Duration::from_secs(config.timeout),
-        provider
-            .client
-            .await_transaction_commit(tx.id().to_string().as_str()),
+        provider.client.await_transaction_commit(
+            tx.id(&network_config.consensus_parameters)
+                .to_string()
+                .as_str(),
+        ),
     )
     .await
     .map(|r| r.map_err(|e| error(format!("Failed to submit transaction with error: {}", e))))
