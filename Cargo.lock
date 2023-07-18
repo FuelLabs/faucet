@@ -1698,7 +1698,6 @@ dependencies = [
  "fuel-core-txpool",
  "fuel-crypto 0.26.1",
  "fuel-tx",
- "fuel-types 0.26.1",
  "fuel-types 0.34.1",
  "fuels-accounts",
  "fuels-core",
@@ -1766,7 +1765,6 @@ version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b8c43ba619e6259a74c9368109006937dfd62cc0b875c2ae13ae6ffa52264f2"
 dependencies = [
- "rand",
  "serde",
 ]
 
