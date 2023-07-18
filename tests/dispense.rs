@@ -1,15 +1,15 @@
 use fuel_core::chain_config::{ChainConfig, CoinConfig, StateConfig};
 use fuel_core::service::config::Trigger;
 use fuel_core::service::{Config as NodeConfig, FuelService};
-use fuel_crypto::SecretKey;
+
 use fuel_faucet::config::Config;
 use fuel_faucet::models::DispenseInfoResponse;
 use fuel_faucet::{start_server, THE_BIGGEST_AMOUNT};
 use fuel_types::{Address, AssetId};
-use fuels_signers::provider::Provider;
-use fuels_signers::wallet::WalletUnlocked;
-use fuels_signers::Signer;
-use fuels_types::bech32::Bech32Address;
+use fuels_accounts::fuel_crypto::SecretKey;
+use fuels_accounts::provider::Provider;
+use fuels_accounts::wallet::WalletUnlocked;
+use fuels_core::types::bech32::Bech32Address;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use secrecy::Secret;
@@ -28,14 +28,7 @@ impl TestContext {
     async fn new(mut rng: StdRng) -> Self {
         let dispense_amount = rng.gen_range(1..10000u64);
         let secret_key: SecretKey = rng.gen();
-        let wallet = WalletUnlocked::new_from_private_key(
-            secret_key,
-            Some(
-                Provider::connect(&SocketAddr::from(([0, 0, 0, 0], 0)).to_string())
-                    .await
-                    .unwrap(),
-            ),
-        );
+        let wallet = WalletUnlocked::new_from_private_key(secret_key, None);
 
         let mut coins: Vec<_> = (0..10000)
             .map(|_| {
@@ -43,8 +36,9 @@ impl TestContext {
                 CoinConfig {
                     tx_id: None,
                     output_index: None,
-                    block_created: None,
                     maturity: None,
+                    tx_pointer_block_height: None,
+                    tx_pointer_tx_idx: None,
                     owner: wallet.address().into(),
                     amount: THE_BIGGEST_AMOUNT - 1,
                     asset_id: Default::default(),
@@ -55,8 +49,9 @@ impl TestContext {
         coins.push(CoinConfig {
             tx_id: None,
             output_index: None,
-            block_created: None,
             maturity: None,
+            tx_pointer_block_height: None,
+            tx_pointer_tx_idx: None,
             owner: wallet.address().into(),
             amount: 1 << 50,
             asset_id: Default::default(),

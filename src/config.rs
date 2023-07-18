@@ -4,7 +4,7 @@ use crate::constants::{
     LOG_FILTER, MAX_DISPENSES_PER_MINUTE, MIN_GAS_PRICE, PUBLIC_FUEL_NODE_URL, SERVICE_PORT,
     TIMEOUT_SECONDS, WALLET_SECRET_KEY,
 };
-use fuel_types::AssetId;
+use fuels_core::types::AssetId;
 use secrecy::Secret;
 use std::env;
 
