@@ -166,8 +166,8 @@ pub async fn dispense_tokens(
             provider
                 .client
                 .coins_to_spend(
-                    &wallet.address().hash().to_string(),
-                    vec![(AssetId::BASE.to_string().as_str(), THE_BIGGEST_AMOUNT, None)],
+                    &wallet.address().into(),
+                    vec![(AssetId::BASE, THE_BIGGEST_AMOUNT, None)],
                     None,
                 )
                 .await
@@ -175,13 +175,11 @@ pub async fn dispense_tokens(
                 .into_iter()
                 .flatten()
                 .filter_map(|resource| match resource {
-                    fuel_core_client::client::schema::coins::CoinType::Coin(coin) => {
-                        Some(CoinOutput {
-                            utxo_id: coin.utxo_id.into(),
-                            owner: coin.owner.into(),
-                            amount: coin.amount.into(),
-                        })
-                    }
+                    fuel_core_client::client::types::CoinType::Coin(coin) => Some(CoinOutput {
+                        utxo_id: coin.utxo_id,
+                        owner: coin.owner,
+                        amount: coin.amount,
+                    }),
                     _ => None,
                 })
                 .last()
@@ -223,7 +221,7 @@ pub async fn dispense_tokens(
         let total_fee =
             TransactionFee::checked_from_tx(&network_config.consensus_parameters, &script.tx)
                 .expect("Can't overflow with transfer transaction")
-                .total();
+                .max_fee();
 
         tx = script.into();
         let result = tokio::time::timeout(
@@ -242,7 +240,7 @@ pub async fn dispense_tokens(
         match result {
             Ok(Ok(_)) => {
                 guard.last_output = Some(CoinOutput {
-                    utxo_id: UtxoId::new(tx.id(&network_config.consensus_parameters), 1),
+                    utxo_id: UtxoId::new(tx.id(&network_config.consensus_parameters.chain_id), 1),
                     owner: coin_output.owner,
                     amount: coin_output.amount - total_fee - config.dispense_amount,
                 });
@@ -256,11 +254,9 @@ pub async fn dispense_tokens(
 
     tokio::time::timeout(
         Duration::from_secs(config.timeout),
-        provider.client.await_transaction_commit(
-            tx.id(&network_config.consensus_parameters)
-                .to_string()
-                .as_str(),
-        ),
+        provider
+            .client
+            .await_transaction_commit(&tx.id(&network_config.consensus_parameters.chain_id)),
     )
     .await
     .map(|r| r.map_err(|e| error(format!("Failed to submit transaction with error: {}", e))))
