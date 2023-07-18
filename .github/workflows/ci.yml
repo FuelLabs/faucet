@@ -12,7 +12,7 @@ env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
   REGISTRY: ghcr.io
-  RUST_VERSION: 1.67.0
+  RUST_VERSION: 1.68.0
 
 jobs:
   cancel-previous-runs:
@@ -39,18 +39,18 @@ jobs:
           version: "0.1"
       - name: Run Cargo.toml linter
         run: git ls-files | grep Cargo.toml$ | xargs --verbose -n 1 cargo-toml-lint
-      - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v2
-        if: always() && github.ref == 'refs/heads/master'
-        with:
-          status: ${{ job.status }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: '{workflow} has {status_message}'
-          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
-          footer: ''
-          notify_when: 'failure'
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
+    #   - name: Notify if Job Fails
+    #     uses: ravsamhq/notify-slack-action@v2
+    #     if: always() && github.ref == 'refs/heads/master'
+    #     with:
+    #       status: ${{ job.status }}
+    #       token: ${{ secrets.GITHUB_TOKEN }}
+    #       notification_title: '{workflow} has {status_message}'
+    #       message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
+    #       footer: ''
+    #       notify_when: 'failure'
+    #     env:
+    #       SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
 
   cargo-fmt-check:
     needs: cancel-previous-runs
@@ -158,15 +158,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v2
-        if: always()
-        with:
-          status: ${{ job.status }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: '{workflow} has {status_message}'
-          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
-          footer: ''
-          notify_when: 'failure'
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
+      # - name: Notify if Job Fails
+      #   uses: ravsamhq/notify-slack-action@v2
+      #   if: always()
+      #   with:
+      #     status: ${{ job.status }}
+      #     token: ${{ secrets.GITHUB_TOKEN }}
+      #     notification_title: '{workflow} has {status_message}'
+      #     message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
+      #     footer: ''
+      #     notify_when: 'failure'
+      #   env:
+      #     SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}

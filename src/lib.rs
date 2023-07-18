@@ -97,7 +97,12 @@ pub async fn start_server(
     let client = FuelClient::new(service_config.node_url.clone())
         .expect("unable to connect to the fuel node api");
 
-    let consensus_parameters = Default::default();
+    let consensus_parameters = client
+        .chain_info()
+        .await
+        .expect("Can't get `consensus_parameters`")
+        .consensus_parameters
+        .into();
     let provider = Provider::new(client, consensus_parameters);
 
     let node_info = provider
