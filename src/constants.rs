@@ -1,4 +1,4 @@
-use fuel_types::AssetId;
+use fuels_core::types::AssetId;
 
 pub const LOG_FILTER: &str = "RUST_LOG";
 pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
