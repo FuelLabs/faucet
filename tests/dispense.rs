@@ -28,14 +28,7 @@ impl TestContext {
     async fn new(mut rng: StdRng) -> Self {
         let dispense_amount = rng.gen_range(1..10000u64);
         let secret_key: SecretKey = rng.gen();
-        let wallet = WalletUnlocked::new_from_private_key(
-            secret_key,
-            Some(
-                Provider::connect(&SocketAddr::from(([0, 0, 0, 0], 0)).to_string())
-                    .await
-                    .unwrap(),
-            ),
-        );
+        let wallet = WalletUnlocked::new_from_private_key(secret_key, None);
 
         let mut coins: Vec<_> = (0..10000)
             .map(|_| {
