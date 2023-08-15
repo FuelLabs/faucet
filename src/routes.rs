@@ -211,6 +211,7 @@ pub async fn dispense_tokens(
             outputs,
             TxParameters::default().set_gas_price(gas_price),
         )
+        .set_gas_limit(0)
         .build()
         .expect("valid script");
 
@@ -220,8 +221,7 @@ pub async fn dispense_tokens(
 
         let total_fee =
             TransactionFee::checked_from_tx(&network_config.consensus_parameters, &script.tx)
-                .expect("Can't overflow with transfer transaction")
-                .max_fee();
+                .expect("Can't overflow with transfer transaction");
 
         tx = script.into();
         let result = tokio::time::timeout(
@@ -242,7 +242,7 @@ pub async fn dispense_tokens(
                 guard.last_output = Some(CoinOutput {
                     utxo_id: UtxoId::new(tx.id(&network_config.consensus_parameters.chain_id), 1),
                     owner: coin_output.owner,
-                    amount: coin_output.amount - total_fee - config.dispense_amount,
+                    amount: coin_output.amount - total_fee.max_fee() - config.dispense_amount,
                 });
                 break;
             }
