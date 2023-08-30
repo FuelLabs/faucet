@@ -146,6 +146,13 @@
     gap: 1rem;
   }
 
+  .captcha-area {
+    height: 100px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
   .loader {
     border: 0.4rem solid #f3f3f3;
     border-top: 0.4rem solid #00F58C;
@@ -202,16 +209,17 @@
         <b class="bold">Test Fuel network</b>. This faucet sends fake Ether
         assets to the provided wallet address.
       </p>
-      {{#if captcha_key}}
-      <div class="captcha-container">
-        <div class="g-recaptcha" data-sitekey="{{ captcha_key }}"></div>
+      <div class="captcha-area">
+        {{#if captcha_key}}
+          <div class="captcha-container">
+            <div class="g-recaptcha" data-sitekey="{{ captcha_key }}"></div>
+          </div>
+        {{/if}}
+        <div class="queued hidden">
+          <div class="loader"></div>
+          <div>Waiting until more tokens are available</div>
+        </div>
       </div>
-      {{/if}}
-      <div class="queued hidden">
-        <div class="loader"></div>
-        <div>Waiting until more tokens are available</div>
-      </div>
-      <br />
       <div id="response-failure"></div>
       <input type="submit" value="Give me Ether" class="button" />
     </form>
@@ -270,7 +278,7 @@
         xhr.setRequestHeader("Accept", "application/json");
         xhr.setRequestHeader("Content-Type", "application/json");
         xhr.onload = () =>
-          handle_response(address)(JSON.parse(xhr.responseText));
+          handle_response(data.address)(JSON.parse(xhr.responseText));
         xhr.onetimeout = () => handle_error("Connection to the server timed out");
         xhr.onerror = () => handle_error("Connection to the server failed");
         xhr.send(JSON.stringify(data));
