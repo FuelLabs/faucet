@@ -24,12 +24,13 @@ use handlebars::Handlebars;
 use reqwest::StatusCode;
 use secrecy::ExposeSecret;
 use serde_json::json;
-use std::time::Duration;
 use std::{
     collections::BTreeMap,
     str::FromStr,
     time::{SystemTime, UNIX_EPOCH},
 };
+use std::{collections::HashMap, time::Duration};
+use tokio::sync::Mutex;
 use tracing::{error, info};
 
 // The amount to fetch the biggest input of the faucet.
@@ -37,6 +38,10 @@ pub const THE_BIGGEST_AMOUNT: u64 = u32::MAX as u64;
 
 lazy_static::lazy_static! {
     static ref START_TIME: u64 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+}
+
+lazy_static::lazy_static! {
+    static ref LAST_DISPENSED: Mutex<HashMap<Address, u64>> = Mutex::new(HashMap::new());
 }
 
 #[memoize::memoize]
@@ -141,6 +146,25 @@ pub async fn dispense_tokens(
         });
     }?;
 
+    let last_dispensed = LAST_DISPENSED
+        .lock()
+        .await
+        .get(&address)
+        .copied()
+        .unwrap_or_default();
+    let current_time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    // Check if the account has received assets in the last 24 hours
+    if current_time - last_dispensed < 24 * 60 * 60 {
+        return Err(DispenseError {
+            status: StatusCode::FORBIDDEN,
+            error: "Account has already received assets today".to_string(),
+        });
+    }
+
     // verify captcha
     if let Some(s) = config.captcha_secret.clone() {
         recaptcha::verify(s.expose_secret(), input.captcha.as_str(), None)
@@ -236,6 +260,11 @@ pub async fn dispense_tokens(
                 e
             ))
         });
+
+        LAST_DISPENSED
+            .lock()
+            .await
+            .insert(address.clone().into(), current_time);
 
         match result {
             Ok(Ok(_)) => {

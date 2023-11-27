@@ -235,3 +235,38 @@ async fn many_concurrent_requests() {
         COUNT as u64 * context.faucet_config.dispense_amount
     );
 }
+
+#[tokio::test]
+async fn dispense_once_per_day() {
+    let mut rng = StdRng::seed_from_u64(42);
+    let recipient_address: Address = rng.gen();
+    let recipient_address_str = format!("{}", &recipient_address);
+    let context = TestContext::new(rng).await;
+    let addr = context.addr;
+
+    let first_response = reqwest::Client::new()
+        .post(format!("http://{addr}/dispense"))
+        .json(&json!({
+            "captcha": "",
+            "address": recipient_address_str.clone(),
+        }))
+        .send()
+        .await
+        .expect("First dispensing request should be successful");
+
+    assert_eq!(first_response.status(), reqwest::StatusCode::CREATED);
+
+    for _ in 0..5 {
+        let response = reqwest::Client::new()
+            .post(format!("http://{addr}/dispense"))
+            .json(&json!({
+                "captcha": "",
+                "address": recipient_address_str.clone(),
+            }))
+            .send()
+            .await
+            .expect("Subsequent dispensing requests should be allowed");
+
+        assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+    }
+}
