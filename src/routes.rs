@@ -202,8 +202,7 @@ pub async fn dispense_tokens(
             outputs,
             TxPolicies::default().with_gas_price(gas_price),
             network_config.network_info.clone(),
-        )
-        .with_gas_limit(0);
+        );
 
         wallet.sign_transaction(&mut script);
 

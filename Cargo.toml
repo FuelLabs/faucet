@@ -12,9 +12,9 @@ description = "A token faucet for onboarding fuel users"
 [dependencies]
 anyhow = "1.0"
 axum = "0.5"
-fuel-core-client = "0.21.0-rc.1"
-fuel-tx = "0.42.1"
-fuel-types = "0.42.1"
+fuel-core-client = "0.21.0"
+fuel-tx = "0.43.0"
+fuel-types = "0.43.0"
 fuels-accounts = "0.51.0"
 fuels-core = "0.51.0"
 handlebars = "4.2"
@@ -31,13 +31,17 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 [dev-dependencies]
-fuel-core = { version = "0.21.0-rc.1", default-features = false }
-fuel-core-txpool = "0.21.0-rc.1"
-fuel-crypto = "0.42.1"
-fuel-types = { version = "0.42.1", features = ["random"] }
+fuel-core = { version = "0.21.0", default-features = false }
+fuel-core-txpool = "0.21.0"
+fuel-crypto = "0.43.0"
+fuel-types = { version = "0.43.0", features = ["random"] }
 futures = "0.3"
 insta = "1.14"
 rand = "0.8"
 
 [build-dependencies]
 minify-html = "0.8"
+
+[patch.crates-io]
+fuels-accounts = { git = "https://github.com/FuelLabs/fuels-rs" }
+fuels-core = { git = "https://github.com/FuelLabs/fuels-rs" }
