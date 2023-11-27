@@ -164,6 +164,11 @@ pub async fn dispense_tokens(
             error: "Account has already received assets today".to_string(),
         });
     }
+    // Evict entries older than 24 hours
+    LAST_DISPENSED
+        .lock()
+        .await
+        .retain(|_, timestamp| current_time - *timestamp <= 24 * 60 * 60);
 
     // verify captcha
     if let Some(s) = config.captcha_secret.clone() {
