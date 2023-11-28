@@ -25,12 +25,12 @@ use reqwest::StatusCode;
 use secrecy::ExposeSecret;
 use serde_json::json;
 use std::{
+    cell::RefCell,
     collections::BTreeMap,
     str::FromStr,
     time::{SystemTime, UNIX_EPOCH},
 };
 use std::{collections::HashMap, time::Duration};
-use tokio::sync::Mutex;
 use tracing::{error, info};
 
 // The amount to fetch the biggest input of the faucet.
@@ -40,8 +40,8 @@ lazy_static::lazy_static! {
     static ref START_TIME: u64 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
 }
 
-lazy_static::lazy_static! {
-    static ref LAST_DISPENSED: Mutex<HashMap<Address, tokio::time::Instant>> = Mutex::new(HashMap::new());
+thread_local! {
+    static LAST_DISPENSED: RefCell<HashMap<Address, tokio::time::Instant>> = RefCell::new(HashMap::new());
 }
 
 const DAY: Duration = Duration::from_secs(24 * 60 * 60);
@@ -129,19 +129,19 @@ impl IntoResponse for DispenseInfoResponse {
 }
 
 async fn has_reached_daily_limit(address: Address) -> bool {
-    let mut last_dispensed = LAST_DISPENSED.lock().await;
+    LAST_DISPENSED.with_borrow_mut(|last_dispensed| {
+        let current_time = tokio::time::Instant::now();
 
-    let current_time = tokio::time::Instant::now();
+        // evict entries older than a day
+        last_dispensed.retain(|_, timestamp| current_time.duration_since(*timestamp) <= DAY);
 
-    // evict entries older than a day
-    last_dispensed.retain(|_, timestamp| current_time.duration_since(*timestamp) <= DAY);
+        if last_dispensed.get(&address).is_none() {
+            last_dispensed.insert(address, current_time);
+            return false;
+        }
 
-    if last_dispensed.get(&address).is_none() {
-        last_dispensed.insert(address, current_time);
-        return false;
-    }
-
-    true
+        true
+    })
 }
 
 #[tracing::instrument(skip(wallet, config))]
@@ -277,7 +277,7 @@ pub async fn dispense_tokens(
                 break;
             }
             _ => {
-                LAST_DISPENSED.lock().await.remove(&address);
+                LAST_DISPENSED.with_borrow_mut(|last_dispensed| last_dispensed.remove(&address));
                 guard.last_output = None;
             }
         };

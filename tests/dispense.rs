@@ -272,7 +272,7 @@ async fn dispense_once_per_day() {
         assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
     }
 
-    tokio::time::advance(Duration::from_secs(time_increment + 1)).await;
+    tokio::time::advance(Duration::from_secs(time_increment)).await;
 
     let response = reqwest::Client::new()
         .post(format!("http://{addr}/dispense"))
