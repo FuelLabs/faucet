@@ -41,8 +41,10 @@ lazy_static::lazy_static! {
 }
 
 lazy_static::lazy_static! {
-    static ref LAST_DISPENSED: Mutex<HashMap<Address, u64>> = Mutex::new(HashMap::new());
+    static ref LAST_DISPENSED: Mutex<HashMap<Address, tokio::time::Instant>> = Mutex::new(HashMap::new());
 }
+
+const DAY: Duration = Duration::from_secs(24 * 60 * 60);
 
 #[memoize::memoize]
 pub fn render_page(public_node_url: String, captcha_key: Option<String>) -> String {
@@ -126,6 +128,22 @@ impl IntoResponse for DispenseInfoResponse {
     }
 }
 
+async fn has_reached_daily_limit(address: Address) -> bool {
+    let mut last_dispensed = LAST_DISPENSED.lock().await;
+
+    let current_time = tokio::time::Instant::now();
+
+    // evict entries older than a day
+    last_dispensed.retain(|_, timestamp| current_time.duration_since(*timestamp) <= DAY);
+
+    if last_dispensed.get(&address).is_none() {
+        last_dispensed.insert(address, current_time);
+        return false;
+    }
+
+    true
+}
+
 #[tracing::instrument(skip(wallet, config))]
 pub async fn dispense_tokens(
     Json(input): Json<DispenseInput>,
@@ -146,29 +164,12 @@ pub async fn dispense_tokens(
         });
     }?;
 
-    let last_dispensed = LAST_DISPENSED
-        .lock()
-        .await
-        .get(&address)
-        .copied()
-        .unwrap_or_default();
-    let current_time = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-
-    // Check if the account has received assets in the last 24 hours
-    if current_time - last_dispensed < 24 * 60 * 60 {
+    if has_reached_daily_limit(address).await {
         return Err(DispenseError {
             status: StatusCode::FORBIDDEN,
             error: "Account has already received assets today".to_string(),
         });
-    }
-    // Evict entries older than 24 hours
-    LAST_DISPENSED
-        .lock()
-        .await
-        .retain(|_, timestamp| current_time - *timestamp <= 24 * 60 * 60);
+    };
 
     // verify captcha
     if let Some(s) = config.captcha_secret.clone() {
@@ -266,11 +267,6 @@ pub async fn dispense_tokens(
             ))
         });
 
-        LAST_DISPENSED
-            .lock()
-            .await
-            .insert(address.clone().into(), current_time);
-
         match result {
             Ok(Ok(_)) => {
                 guard.last_output = Some(CoinOutput {
@@ -281,6 +277,7 @@ pub async fn dispense_tokens(
                 break;
             }
             _ => {
+                LAST_DISPENSED.lock().await.remove(&address);
                 guard.last_output = None;
             }
         };

@@ -230,10 +230,7 @@ async fn many_concurrent_requests() {
         .iter()
         .map(|coin| coin.amount)
         .sum();
-    assert_eq!(
-        test_balance,
-        COUNT as u64 * context.faucet_config.dispense_amount
-    );
+    assert_eq!(test_balance, context.faucet_config.dispense_amount);
 }
 
 #[tokio::test]
@@ -244,7 +241,7 @@ async fn dispense_once_per_day() {
     let context = TestContext::new(rng).await;
     let addr = context.addr;
 
-    let first_response = reqwest::Client::new()
+    let response = reqwest::Client::new()
         .post(format!("http://{addr}/dispense"))
         .json(&json!({
             "captcha": "",
@@ -254,9 +251,14 @@ async fn dispense_once_per_day() {
         .await
         .expect("First dispensing request should be successful");
 
-    assert_eq!(first_response.status(), reqwest::StatusCode::CREATED);
+    assert_eq!(response.status(), reqwest::StatusCode::CREATED);
 
+    tokio::time::pause();
+
+    let time_increment = 4 * 60 * 60;
     for _ in 0..5 {
+        tokio::time::advance(Duration::from_secs(time_increment)).await;
+
         let response = reqwest::Client::new()
             .post(format!("http://{addr}/dispense"))
             .json(&json!({
@@ -269,4 +271,18 @@ async fn dispense_once_per_day() {
 
         assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
     }
+
+    tokio::time::advance(Duration::from_secs(time_increment + 1)).await;
+
+    let response = reqwest::Client::new()
+        .post(format!("http://{addr}/dispense"))
+        .json(&json!({
+            "captcha": "",
+            "address": recipient_address_str.clone(),
+        }))
+        .send()
+        .await
+        .expect("Subsequent dispensing requests should be allowed");
+
+    assert_eq!(response.status(), reqwest::StatusCode::CREATED);
 }
