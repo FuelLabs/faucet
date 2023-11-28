@@ -15,8 +15,8 @@ axum = "0.5"
 fuel-core-client = "0.21.0"
 fuel-tx = "0.43.0"
 fuel-types = "0.43.0"
-fuels-accounts = "0.51.0"
-fuels-core = "0.51.0"
+fuels-accounts = "0.52.0"
+fuels-core = "0.52.0"
 handlebars = "4.2"
 lazy_static = "1.4"
 memoize = "0.3.1"
@@ -41,7 +41,3 @@ rand = "0.8"
 
 [build-dependencies]
 minify-html = "0.8"
-
-[patch.crates-io]
-fuels-accounts = { git = "https://github.com/FuelLabs/fuels-rs" }
-fuels-core = { git = "https://github.com/FuelLabs/fuels-rs" }
