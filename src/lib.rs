@@ -12,10 +12,11 @@ use axum::{
     BoxError, Extension, Json, Router,
 };
 use fuel_core_client::client::FuelClient;
-use fuel_tx::{ConsensusParameters, UtxoId};
+use fuel_tx::UtxoId;
 use fuel_types::Address;
 use fuels_accounts::{provider::Provider, wallet::WalletUnlocked, ViewOnlyAccount};
 use fuels_core::types::node_info::NodeInfo;
+use fuels_core::types::transaction_builders::NetworkInfo;
 use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
 use std::{
@@ -43,7 +44,7 @@ pub use routes::THE_BIGGEST_AMOUNT;
 
 #[derive(Debug)]
 pub struct NetworkConfig {
-    pub consensus_parameters: ConsensusParameters,
+    pub network_info: NetworkInfo,
     pub node_info: NodeInfo,
 }
 
@@ -97,13 +98,12 @@ pub async fn start_server(
     let client = FuelClient::new(service_config.node_url.clone())
         .expect("unable to connect to the fuel node api");
 
-    let consensus_parameters = client
-        .chain_info()
-        .await
-        .expect("Can't get `consensus_parameters`")
-        .consensus_parameters
-        .into();
-    let provider = Provider::new(client, consensus_parameters);
+    let chain_info = client.chain_info().await.expect("Can't get `chain_info`");
+    let provider = Provider::new(
+        service_config.node_url.clone(),
+        chain_info.consensus_parameters.clone(),
+    )
+    .expect("Should create a provider");
 
     let node_info = provider
         .node_info()
@@ -111,7 +111,7 @@ pub async fn start_server(
         .expect("unable to get `node_info`");
 
     let network_config = NetworkConfig {
-        consensus_parameters,
+        network_info: NetworkInfo::new(node_info.clone(), chain_info.into()),
         node_info,
     };
 
@@ -160,10 +160,6 @@ pub async fn start_server(
                 ServiceBuilder::new()
                     .layer(HandleErrorLayer::new(handle_error))
                     .buffer(MAX_CONCURRENT_REQUESTS)
-                    .rate_limit(
-                        service_config.max_dispenses_per_minute,
-                        Duration::from_secs(60),
-                    )
                     .concurrency_limit(network_config.node_info.max_depth as usize)
                     .into_inner(),
             ),
@@ -177,6 +173,7 @@ pub async fn start_server(
                 .timeout(Duration::from_secs(60))
                 .layer(TraceLayer::new_for_http())
                 .layer(Extension(Arc::new(wallet)))
+                .layer(Extension(Arc::new(client)))
                 .layer(Extension(Arc::new(tokio::sync::Mutex::new(
                     FaucetState::new(service_config.min_gas_price, &network_config.node_info),
                 ))))

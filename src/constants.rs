@@ -16,12 +16,6 @@ pub const FAUCET_ASSET_ID: AssetId = AssetId::new([0; 32]);
 pub const SERVICE_PORT: &str = "PORT";
 pub const DEFAULT_PORT: u16 = 3000;
 
-/// The max number of requests that can be applied in a given timeframe
-///
-/// 20 dispenses / minute would take 10 years to exhaust the faucet with 1<<50 coins
-/// and dispense amount of 10mm tokens.
-pub const MAX_DISPENSES_PER_MINUTE: &str = "MAX_DISPENSES_PER_MINUTE";
-pub const DEFAULT_MAX_DISPENSES_PER_MINUTE: &str = "20";
 pub const MIN_GAS_PRICE: &str = "MIN_GAS_PRICE";
 pub const TIMEOUT_SECONDS: &str = "TIMEOUT_SECONDS";
 

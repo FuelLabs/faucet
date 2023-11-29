@@ -7,23 +7,23 @@ use axum::{
     Extension, Json,
 };
 
-use fuel_tx::{TransactionFee, UniqueIdentifier, UtxoId};
+use fuel_core_client::client::FuelClient;
+use fuel_tx::UtxoId;
 use fuel_types::{Address, AssetId};
-use fuels_accounts::{Account, Signer};
+use fuels_accounts::{Account, Signer, ViewOnlyAccount};
+use fuels_core::types::transaction::{Transaction, TxPolicies};
+use fuels_core::types::transaction_builders::BuildableTransaction;
 use fuels_core::types::{
     bech32::Bech32Address,
     coin::{Coin, CoinStatus},
     coin_type::CoinType,
-    transaction::TxParameters,
 };
-use fuels_core::types::{
-    input::Input,
-    transaction_builders::{ScriptTransactionBuilder, TransactionBuilder},
-};
+use fuels_core::types::{input::Input, transaction_builders::ScriptTransactionBuilder};
 use handlebars::Handlebars;
 use reqwest::StatusCode;
 use secrecy::ExposeSecret;
 use serde_json::json;
+use std::sync::Arc;
 use std::time::Duration;
 use std::{
     collections::BTreeMap,
@@ -70,8 +70,7 @@ pub async fn health(Extension(wallet): Extension<SharedWallet>) -> Response {
     let client = wallet
         .provider()
         .expect("client provider")
-        .client
-        .health()
+        .healthy()
         .await
         .unwrap_or(false);
 
@@ -127,6 +126,7 @@ pub async fn dispense_tokens(
     Extension(wallet): Extension<SharedWallet>,
     Extension(state): Extension<SharedFaucetState>,
     Extension(config): Extension<SharedConfig>,
+    Extension(client): Extension<Arc<FuelClient>>,
     Extension(network_config): Extension<SharedNetworkConfig>,
 ) -> Result<DispenseResponse, DispenseError> {
     // parse deposit address
@@ -156,28 +156,22 @@ pub async fn dispense_tokens(
 
     let provider = wallet.provider().expect("client provider");
 
-    let mut tx;
+    let mut tx_id;
 
     loop {
         let mut guard = state.lock().await;
         let coin_output = if let Some(previous_coin_output) = &guard.last_output {
             *previous_coin_output
         } else {
-            provider
-                .client
-                .coins_to_spend(
-                    &wallet.address().into(),
-                    vec![(AssetId::BASE, THE_BIGGEST_AMOUNT, None)],
-                    None,
-                )
+            wallet
+                .get_spendable_resources(AssetId::BASE, THE_BIGGEST_AMOUNT)
                 .await
                 .map_err(|e| error(format!("Failed to get resources: {}", e)))?
                 .into_iter()
-                .flatten()
-                .filter_map(|resource| match resource {
-                    fuel_core_client::client::types::CoinType::Coin(coin) => Some(CoinOutput {
+                .filter_map(|coin| match coin {
+                    CoinType::Coin(coin) => Some(CoinOutput {
                         utxo_id: coin.utxo_id,
-                        owner: coin.owner,
+                        owner: coin.owner.into(),
                         amount: coin.amount,
                     }),
                     _ => None,
@@ -196,7 +190,7 @@ pub async fn dispense_tokens(
             status: CoinStatus::Unspent,
         });
 
-        let inputs = vec![Input::resource_signed(coin_type, 0)];
+        let inputs = vec![Input::resource_signed(coin_type)];
 
         let outputs = wallet.get_asset_outputs_for_amount(
             &address.into(),
@@ -209,24 +203,22 @@ pub async fn dispense_tokens(
         let mut script = ScriptTransactionBuilder::prepare_transfer(
             inputs,
             outputs,
-            TxParameters::default().set_gas_price(gas_price),
-        )
-        .set_gas_limit(0)
-        .build()
-        .expect("valid script");
+            TxPolicies::default().with_gas_price(gas_price),
+            network_config.network_info.clone(),
+        );
 
-        wallet
-            .sign_transaction(&mut script)
-            .map_err(|e| error(format!("Failed to sign transaction: {}", e)))?;
+        wallet.sign_transaction(&mut script);
 
-        let total_fee =
-            TransactionFee::checked_from_tx(&network_config.consensus_parameters, &script.tx)
-                .expect("Can't overflow with transfer transaction");
+        let script = script.build(provider).await.expect("valid script");
 
-        tx = script.into();
+        let total_fee = script
+            .fee_checked_from_tx(&network_config.network_info.consensus_parameters)
+            .expect("Should be able to calculate fee");
+
+        tx_id = script.id(network_config.network_info.consensus_parameters.chain_id);
         let result = tokio::time::timeout(
             Duration::from_secs(config.timeout),
-            provider.client.submit(&tx),
+            provider.send_transaction(script),
         )
         .await
         .map(|r| r.map_err(|e| error(format!("Failed to submit transaction: {}", e))))
@@ -240,9 +232,9 @@ pub async fn dispense_tokens(
         match result {
             Ok(Ok(_)) => {
                 guard.last_output = Some(CoinOutput {
-                    utxo_id: UtxoId::new(tx.id(&network_config.consensus_parameters.chain_id), 1),
+                    utxo_id: UtxoId::new(tx_id, 1),
                     owner: coin_output.owner,
-                    amount: coin_output.amount - total_fee.max_fee() - config.dispense_amount,
+                    amount: coin_output.amount - total_fee.min_fee() - config.dispense_amount,
                 });
                 break;
             }
@@ -254,9 +246,7 @@ pub async fn dispense_tokens(
 
     tokio::time::timeout(
         Duration::from_secs(config.timeout),
-        provider
-            .client
-            .await_transaction_commit(&tx.id(&network_config.consensus_parameters.chain_id)),
+        client.await_transaction_commit(&tx_id),
     )
     .await
     .map(|r| r.map_err(|e| error(format!("Failed to submit transaction with error: {}", e))))
