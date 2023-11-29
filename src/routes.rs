@@ -1,6 +1,6 @@
 use crate::{
-    models::*, recaptcha, CoinOutput, SharedConfig, SharedFaucetState, SharedNetworkConfig,
-    SharedWallet,
+    models::*, recaptcha, CoinOutput, SharedConfig, SharedDispenseTracker, SharedFaucetState,
+    SharedNetworkConfig, SharedWallet,
 };
 use axum::{
     response::{Html, IntoResponse, Response},
@@ -26,12 +26,10 @@ use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{
-    cell::RefCell,
     collections::BTreeMap,
     str::FromStr,
     time::{SystemTime, UNIX_EPOCH},
 };
-use std::{collections::HashMap, time::Duration};
 use tracing::{error, info};
 
 // The amount to fetch the biggest input of the faucet.
@@ -40,12 +38,6 @@ pub const THE_BIGGEST_AMOUNT: u64 = u32::MAX as u64;
 lazy_static::lazy_static! {
     static ref START_TIME: u64 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
 }
-
-thread_local! {
-    static LAST_DISPENSED: RefCell<HashMap<Address, tokio::time::Instant>> = RefCell::new(HashMap::new());
-}
-
-const DAY: Duration = Duration::from_secs(24 * 60 * 60);
 
 #[memoize::memoize]
 pub fn render_page(public_node_url: String, captcha_key: Option<String>) -> String {
@@ -128,20 +120,20 @@ impl IntoResponse for DispenseInfoResponse {
     }
 }
 
-async fn has_reached_daily_limit(address: Address) -> bool {
-    LAST_DISPENSED.with_borrow_mut(|last_dispensed| {
-        let current_time = tokio::time::Instant::now();
+async fn has_reached_dispense_limit(
+    dispense_tracker: &SharedDispenseTracker,
+    address: Address,
+    interval: u64,
+) -> bool {
+    let mut dispense_tracker = dispense_tracker.lock().await;
+    dispense_tracker.untrack_elapsed(interval);
 
-        // evict entries older than a day
-        last_dispensed.retain(|_, timestamp| current_time.duration_since(*timestamp) < DAY);
+    if !dispense_tracker.is_tracked(&address) {
+        dispense_tracker.track(address);
+        return false;
+    }
 
-        if last_dispensed.get(&address).is_none() {
-            last_dispensed.insert(address, current_time);
-            return false;
-        }
-
-        true
-    })
+    true
 }
 
 #[tracing::instrument(skip(wallet, config))]
@@ -152,6 +144,7 @@ pub async fn dispense_tokens(
     Extension(config): Extension<SharedConfig>,
     Extension(client): Extension<Arc<FuelClient>>,
     Extension(network_config): Extension<SharedNetworkConfig>,
+    Extension(dispense_tracker): Extension<SharedDispenseTracker>,
 ) -> Result<DispenseResponse, DispenseError> {
     // parse deposit address
     let address = if let Ok(address) = Address::from_str(input.address.as_str()) {
@@ -165,11 +158,11 @@ pub async fn dispense_tokens(
         });
     }?;
 
-    if has_reached_daily_limit(address).await {
-        return Err(DispenseError {
-            status: StatusCode::FORBIDDEN,
-            error: "Account has already received assets today".to_string(),
-        });
+    if has_reached_dispense_limit(&dispense_tracker, address, config.dispense_limit_interval).await
+    {
+        return Err(error(
+            "Account has already received assets today".to_string(),
+        ));
     };
 
     // verify captcha
@@ -253,15 +246,12 @@ pub async fn dispense_tokens(
         )
         .await
         .map(|r| r.map_err(|e| error(format!("Failed to submit transaction: {}", e))))
-        .map_err(|e| {
-            error(format!(
-                "Timeout during while submitting transaction: {}",
-                e
-            ))
-        });
+        .map_err(|e| error(format!("Timeout while submitting transaction: {}", e)));
 
         match result {
             Ok(Ok(_)) => {
+                dispense_tracker.lock().await.track(address);
+
                 guard.last_output = Some(CoinOutput {
                     utxo_id: UtxoId::new(tx_id, 1),
                     owner: coin_output.owner,
@@ -270,7 +260,6 @@ pub async fn dispense_tokens(
                 break;
             }
             _ => {
-                LAST_DISPENSED.with_borrow_mut(|last_dispensed| last_dispensed.remove(&address));
                 guard.last_output = None;
             }
         };

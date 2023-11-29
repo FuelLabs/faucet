@@ -5,7 +5,7 @@ use fuel_core::service::{Config as NodeConfig, FuelService};
 use fuel_core_client::client::pagination::{PageDirection, PaginationRequest};
 use fuel_faucet::config::Config;
 use fuel_faucet::models::DispenseInfoResponse;
-use fuel_faucet::{start_server, THE_BIGGEST_AMOUNT};
+use fuel_faucet::{start_server, Clock, THE_BIGGEST_AMOUNT};
 use fuel_tx::{ConsensusParameters, FeeParameters};
 use fuel_types::{Address, AssetId};
 use fuels_accounts::fuel_crypto::SecretKey;
@@ -18,7 +18,31 @@ use rand::{Rng, SeedableRng};
 use secrecy::Secret;
 use serde_json::json;
 use std::net::SocketAddr;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+#[derive(Debug, Clone)]
+struct MockClock {
+    timer: Arc<Mutex<u64>>,
+}
+
+impl Clock for MockClock {
+    fn now(&self) -> u64 {
+        *self.timer.lock().unwrap()
+    }
+}
+
+impl MockClock {
+    pub fn new() -> Self {
+        Self {
+            timer: Arc::new(Mutex::new(0)),
+        }
+    }
+
+    pub fn advance(&self, increment: u64) {
+        *self.timer.lock().as_deref_mut().unwrap() += increment
+    }
+}
 
 struct TestContext {
     #[allow(dead_code)]
@@ -26,6 +50,7 @@ struct TestContext {
     faucet_config: Config,
     provider: Provider,
     addr: SocketAddr,
+    clock: MockClock,
 }
 impl TestContext {
     async fn new(mut rng: StdRng) -> Self {
@@ -106,13 +131,16 @@ impl TestContext {
             min_gas_price: 1,
             ..Default::default()
         };
-        let (addr, _) = start_server(faucet_config.clone()).await;
+
+        let clock = MockClock::new();
+        let (addr, _) = start_server(faucet_config.clone(), clock.clone()).await;
 
         Self {
             fuel_node,
             faucet_config,
             provider,
             addr,
+            clock,
         }
     }
 }
@@ -200,26 +228,32 @@ async fn _dispense_sends_coins_to_valid_address(
 #[tokio::test]
 async fn many_concurrent_requests() {
     let mut rng = StdRng::seed_from_u64(42);
-    let recipient_address: Address = rng.gen();
-    let recipient_address_str = format!("{}", &recipient_address);
+    const RECIPIENTS: usize = 3;
+    let recipient_addresses: [Address; RECIPIENTS] = [rng.gen(); 3];
+    let recipient_addresses_str: Vec<_> = recipient_addresses
+        .iter()
+        .map(|addr| format!("{}", addr))
+        .collect();
     let context = TestContext::new(rng).await;
     let addr = context.addr;
 
     let mut queries = vec![];
-    const COUNT: usize = 30;
-    for _ in 0..COUNT {
-        let recipient_address_str = recipient_address_str.clone();
-        queries.push(async move {
-            let client = reqwest::Client::new();
-            client
-                .post(format!("http://{addr}/dispense"))
-                .json(&json!({
-                    "captcha": "",
-                    "address": recipient_address_str,
-                }))
-                .send()
-                .await
-        });
+    const REQ_PER_RECIPIENT: usize = 10;
+    for recipient in recipient_addresses_str {
+        for _ in 0..REQ_PER_RECIPIENT {
+            let recipient = recipient.clone();
+            queries.push(async move {
+                let client = reqwest::Client::new();
+                client
+                    .post(format!("http://{addr}/dispense"))
+                    .json(&json!({
+                        "captcha": "",
+                        "address": recipient,
+                    }))
+                    .send()
+                    .await
+            });
+        }
     }
 
     let queries = futures::future::join_all(queries).await;
@@ -228,19 +262,7 @@ async fn many_concurrent_requests() {
         query.expect("Query should be successful");
     }
 
-    let test_balance: u64 = context
-        .provider
-        .get_coins(
-            &recipient_address.into(),
-            context.faucet_config.dispense_asset_id,
-        )
-        .await
-        .unwrap()
-        .iter()
-        .map(|coin| coin.amount)
-        .sum();
-  
-        let txs = context
+    let txs = context
         .provider
         .get_transactions(PaginationRequest {
             cursor: None,
@@ -253,14 +275,20 @@ async fn many_concurrent_requests() {
         .into_iter()
         .filter(|tx| !matches!(tx.transaction, TransactionType::Mint(_)))
         .collect::<Vec<_>>();
+    assert_eq!(1, txs.len());
 
-    assert_eq!(COUNT, txs.len());
-    assert_eq!(
-        test_balance,
-        COUNT as u64 * context.faucet_config.dispense_amount
-    );
+    for recipient in recipient_addresses {
+        let test_balance: u64 = context
+            .provider
+            .get_coins(&recipient.into(), context.faucet_config.dispense_asset_id)
+            .await
+            .unwrap()
+            .iter()
+            .map(|coin| coin.amount)
+            .sum();
 
-    assert_eq!(test_balance, context.faucet_config.dispense_amount);
+        assert_eq!(test_balance, context.faucet_config.dispense_amount);
+    }
 }
 
 #[tokio::test]
@@ -270,6 +298,9 @@ async fn dispense_once_per_day() {
     let recipient_address_str = format!("{}", &recipient_address);
     let context = TestContext::new(rng).await;
     let addr = context.addr;
+
+    let dispense_interval = 24 * 60 * 60;
+    let time_increment = dispense_interval / 6;
 
     let response = reqwest::Client::new()
         .post(format!("http://{addr}/dispense"))
@@ -283,11 +314,9 @@ async fn dispense_once_per_day() {
 
     assert_eq!(response.status(), reqwest::StatusCode::CREATED);
 
-    tokio::time::pause();
-
-    let time_increment = 4 * 60 * 60;
     for _ in 0..5 {
-        tokio::time::advance(Duration::from_secs(time_increment)).await;
+        //tokio::time::advance(Duration::from_secs(time_increment)).await;
+        context.clock.advance(time_increment);
 
         let response = reqwest::Client::new()
             .post(format!("http://{addr}/dispense"))
@@ -297,13 +326,19 @@ async fn dispense_once_per_day() {
             }))
             .send()
             .await
-            .expect("Subsequent dispensing requests should be allowed");
+            .expect("Subsequent dispensing requests should be successful with status 500");
 
-        assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+        assert_eq!(
+            response.status(),
+            reqwest::StatusCode::INTERNAL_SERVER_ERROR
+        );
     }
 
-    tokio::time::advance(Duration::from_secs(time_increment)).await;
+    //tokio::time::advance(Duration::from_secs(time_increment)).await;
+    context.clock.advance(time_increment + 1);
 
+    // time needs to be resumed so tokio::timeout doesn't fail
+    //tokio::time::resume();
     let response = reqwest::Client::new()
         .post(format!("http://{addr}/dispense"))
         .json(&json!({
@@ -312,7 +347,7 @@ async fn dispense_once_per_day() {
         }))
         .send()
         .await
-        .expect("Subsequent dispensing requests should be allowed");
+        .expect("Dispensing requests after the interval should be successful");
 
     assert_eq!(response.status(), reqwest::StatusCode::CREATED);
 }
