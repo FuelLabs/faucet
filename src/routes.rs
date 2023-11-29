@@ -133,7 +133,7 @@ async fn has_reached_daily_limit(address: Address) -> bool {
         let current_time = tokio::time::Instant::now();
 
         // evict entries older than a day
-        last_dispensed.retain(|_, timestamp| current_time.duration_since(*timestamp) <= DAY);
+        last_dispensed.retain(|_, timestamp| current_time.duration_since(*timestamp) < DAY);
 
         if last_dispensed.get(&address).is_none() {
             last_dispensed.insert(address, current_time);
