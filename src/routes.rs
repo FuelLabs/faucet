@@ -4,7 +4,7 @@ use crate::{
 };
 use axum::{
     response::{Html, IntoResponse, Response},
-    Extension, Json,
+    Extension, Json, routing::{get_service, MethodRouter},
 };
 
 use fuel_core_client::client::FuelClient;
@@ -24,12 +24,13 @@ use reqwest::StatusCode;
 use secrecy::ExposeSecret;
 use serde_json::json;
 use std::sync::Arc;
-use std::time::Duration;
 use std::{
     collections::BTreeMap,
+    io,
     str::FromStr,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use tower_http::services::ServeFile;
 use tracing::{error, info};
 
 // The amount to fetch the biggest input of the faucet.
@@ -57,6 +58,21 @@ pub fn render_page(public_node_url: String, captcha_key: Option<String>) -> Stri
     // render page
     handlebars.render("index", &data).unwrap()
 }
+
+#[memoize::memoize]
+pub fn serve_worker() -> MethodRouter {
+    let template = concat!(env!("OUT_DIR"), "/worker.js");
+    
+    async fn handle_error(_err: io::Error) -> impl IntoResponse {
+        dbg!(_err);
+        (StatusCode::INTERNAL_SERVER_ERROR, "Could not serve worker.js")
+    }
+    dbg!(template);
+    get_service(
+        ServeFile::new(template)
+    ).handle_error(handle_error)
+}
+
 
 pub async fn main(Extension(config): Extension<SharedConfig>) -> Html<String> {
     let public_node_url = config.public_node_url.clone();

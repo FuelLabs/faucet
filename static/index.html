@@ -264,27 +264,37 @@
       }
 
       function give_me_coins(form) {
-        const data = {
-          address: form["address"].value,
-          captcha: "",
+
+        let w = new Worker('./worker.js');
+
+        w.onmessage = function(event){
+          var reply = parseInt(event.data);
+          console.log(reply);
         };
+        w.postMessage("5");
+        
 
-        if (hasCaptcha()) {
-          data.captcha = form["g-recaptcha-response"].value;
-        }
+        // const data = {
+        //   address: form["address"].value,
+        //   captcha: "",
+        // };
 
-        let xhr = new XMLHttpRequest();
-        xhr.open("POST", "/dispense");
-        xhr.setRequestHeader("Accept", "application/json");
-        xhr.setRequestHeader("Content-Type", "application/json");
-        xhr.onload = () =>
-          handle_response(data.address)(JSON.parse(xhr.responseText));
-        xhr.onetimeout = () => handle_error("Connection to the server timed out");
-        xhr.onerror = () => handle_error("Connection to the server failed");
-        xhr.send(JSON.stringify(data));
+        // if (hasCaptcha()) {
+        //   data.captcha = form["g-recaptcha-response"].value;
+        // }
 
-        document.getElementById("response-failure").innerText = "";
-        showWaiting();
+        // let xhr = new XMLHttpRequest();
+        // xhr.open("POST", "/dispense");
+        // xhr.setRequestHeader("Accept", "application/json");
+        // xhr.setRequestHeader("Content-Type", "application/json");
+        // xhr.onload = () =>
+        //   handle_response(data.address)(JSON.parse(xhr.responseText));
+        // xhr.onetimeout = () => handle_error("Connection to the server timed out");
+        // xhr.onerror = () => handle_error("Connection to the server failed");
+        // xhr.send(JSON.stringify(data));
+
+        // document.getElementById("response-failure").innerText = "";
+        // showWaiting();
       }
 
       function handle_response(address) {
