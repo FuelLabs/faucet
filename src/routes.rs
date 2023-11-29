@@ -10,7 +10,7 @@ use axum::{
 use fuel_core_client::client::FuelClient;
 use fuel_tx::UtxoId;
 use fuel_types::{Address, AssetId};
-use fuels_accounts::{Account, Signer};
+use fuels_accounts::{Account, Signer, ViewOnlyAccount};
 use fuels_core::types::transaction::{Transaction, TxPolicies};
 use fuels_core::types::transaction_builders::BuildableTransaction;
 use fuels_core::types::{
@@ -163,15 +163,18 @@ pub async fn dispense_tokens(
         let coin_output = if let Some(previous_coin_output) = &guard.last_output {
             *previous_coin_output
         } else {
-            provider
-                .get_coins(&wallet.address().into(), AssetId::BASE)
+            wallet
+                .get_spendable_resources(AssetId::BASE, THE_BIGGEST_AMOUNT)
                 .await
                 .map_err(|e| error(format!("Failed to get resources: {}", e)))?
                 .into_iter()
-                .map(|coin| CoinOutput {
-                    utxo_id: coin.utxo_id,
-                    owner: coin.owner.into(),
-                    amount: coin.amount,
+                .filter_map(|coin| match coin {
+                    CoinType::Coin(coin) => Some(CoinOutput {
+                        utxo_id: coin.utxo_id,
+                        owner: coin.owner.into(),
+                        amount: coin.amount,
+                    }),
+                    _ => None,
                 })
                 .last()
                 .expect("The wallet is empty")
