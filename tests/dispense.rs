@@ -229,7 +229,9 @@ async fn _dispense_sends_coins_to_valid_address(
 async fn many_concurrent_requests() {
     let mut rng = StdRng::seed_from_u64(42);
     const RECIPIENTS: usize = 3;
-    let recipient_addresses: [Address; RECIPIENTS] = [rng.gen(); 3];
+    let recipient_addresses: Vec<Address> = std::iter::repeat_with(|| rng.gen())
+        .take(RECIPIENTS)
+        .collect();
     let recipient_addresses_str: Vec<_> = recipient_addresses
         .iter()
         .map(|addr| format!("{}", addr))
@@ -275,17 +277,14 @@ async fn many_concurrent_requests() {
         .into_iter()
         .filter(|tx| !matches!(tx.transaction, TransactionType::Mint(_)))
         .collect::<Vec<_>>();
-    assert_eq!(1, txs.len());
+    assert_eq!(3, txs.len());
 
     for recipient in recipient_addresses {
-        let test_balance: u64 = context
+        let test_balance = context
             .provider
-            .get_coins(&recipient.into(), context.faucet_config.dispense_asset_id)
+            .get_asset_balance(&recipient.into(), context.faucet_config.dispense_asset_id)
             .await
-            .unwrap()
-            .iter()
-            .map(|coin| coin.amount)
-            .sum();
+            .unwrap();
 
         assert_eq!(test_balance, context.faucet_config.dispense_amount);
     }

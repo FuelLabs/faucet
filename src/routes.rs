@@ -125,11 +125,11 @@ async fn has_reached_dispense_limit(
     address: Address,
     interval: u64,
 ) -> bool {
-    let mut dispense_tracker = dispense_tracker.lock().await;
+    let mut dispense_tracker = dispense_tracker.lock().unwrap();
     dispense_tracker.untrack_elapsed(interval);
 
     if !dispense_tracker.is_tracked(&address) {
-        dispense_tracker.track(address);
+        dispense_tracker.mark_in_progress(address);
         return false;
     }
 
@@ -250,7 +250,7 @@ pub async fn dispense_tokens(
 
         match result {
             Ok(Ok(_)) => {
-                dispense_tracker.lock().await.track(address);
+                dispense_tracker.lock().unwrap().track(address);
 
                 guard.last_output = Some(CoinOutput {
                     utxo_id: UtxoId::new(tx_id, 1),

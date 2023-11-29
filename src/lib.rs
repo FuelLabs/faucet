@@ -22,7 +22,7 @@ use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
 use std::{
     net::{SocketAddr, TcpListener},
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::Duration,
 };
 use tokio::task::JoinHandle;
@@ -91,7 +91,7 @@ pub type SharedFaucetState = Arc<tokio::sync::Mutex<FaucetState>>;
 pub type SharedWallet = Arc<WalletUnlocked>;
 pub type SharedConfig = Arc<Config>;
 pub type SharedNetworkConfig = Arc<NetworkConfig>;
-pub type SharedDispenseTracker = Arc<tokio::sync::Mutex<DispenseTracker>>;
+pub type SharedDispenseTracker = Arc<Mutex<DispenseTracker>>;
 
 pub async fn start_server(
     service_config: Config,
@@ -184,9 +184,7 @@ pub async fn start_server(
                 ))))
                 .layer(Extension(Arc::new(service_config.clone())))
                 .layer(Extension(Arc::new(network_config)))
-                .layer(Extension(Arc::new(tokio::sync::Mutex::new(
-                    DispenseTracker::new(clock),
-                ))))
+                .layer(Extension(Arc::new(Mutex::new(DispenseTracker::new(clock)))))
                 .layer(
                     CorsLayer::new()
                         .allow_origin(Any)
