@@ -150,6 +150,7 @@ pub async fn start_server(
                 HeaderValue::from_static("public, max-age=3600, immutable"),
             )),
         )
+        .nest("/worker.js", routes::serve_worker())
         .route("/health", get(health))
         .route("/dispense", get(routes::dispense_info))
         .route(
