@@ -2,14 +2,17 @@ use fuel_core::chain_config::{ChainConfig, CoinConfig, StateConfig};
 use fuel_core::service::config::Trigger;
 use fuel_core::service::{Config as NodeConfig, FuelService};
 
+use fuel_core_client::client::pagination::{PageDirection, PaginationRequest};
 use fuel_faucet::config::Config;
 use fuel_faucet::models::DispenseInfoResponse;
 use fuel_faucet::{start_server, THE_BIGGEST_AMOUNT};
+use fuel_tx::{ConsensusParameters, FeeParameters};
 use fuel_types::{Address, AssetId};
 use fuels_accounts::fuel_crypto::SecretKey;
 use fuels_accounts::provider::Provider;
 use fuels_accounts::wallet::WalletUnlocked;
 use fuels_core::types::bech32::Bech32Address;
+use fuels_core::types::transaction::TransactionType;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use secrecy::Secret;
@@ -27,7 +30,7 @@ struct TestContext {
 impl TestContext {
     async fn new(mut rng: StdRng) -> Self {
         let dispense_amount = rng.gen_range(1..10000u64);
-        let secret_key: SecretKey = rng.gen();
+        let secret_key: SecretKey = SecretKey::random(&mut rng);
         let wallet = WalletUnlocked::new_from_private_key(secret_key, None);
 
         let mut coins: Vec<_> = (0..10000)
@@ -41,7 +44,7 @@ impl TestContext {
                     tx_pointer_tx_idx: None,
                     owner: wallet.address().into(),
                     amount: THE_BIGGEST_AMOUNT - 1,
-                    asset_id: Default::default(),
+                    asset_id: rng.gen(),
                 }
             })
             .collect();
@@ -66,6 +69,13 @@ impl TestContext {
                     height: None,
                     messages: None,
                 }),
+                consensus_parameters: ConsensusParameters {
+                    fee_params: FeeParameters {
+                        gas_price_factor: 1,
+                        ..Default::default()
+                    },
+                    ..ConsensusParameters::default()
+                },
                 ..ChainConfig::local_testnet()
             },
             block_production: Trigger::Interval {
@@ -196,8 +206,7 @@ async fn many_concurrent_requests() {
     let addr = context.addr;
 
     let mut queries = vec![];
-    // The same as `DEFAULT_MAX_DISPENSES_PER_MINUTE`.
-    const COUNT: usize = 20;
+    const COUNT: usize = 30;
     for _ in 0..COUNT {
         let recipient_address_str = recipient_address_str.clone();
         queries.push(async move {
@@ -230,6 +239,27 @@ async fn many_concurrent_requests() {
         .iter()
         .map(|coin| coin.amount)
         .sum();
+  
+        let txs = context
+        .provider
+        .get_transactions(PaginationRequest {
+            cursor: None,
+            results: 1000,
+            direction: PageDirection::Forward,
+        })
+        .await
+        .unwrap()
+        .results
+        .into_iter()
+        .filter(|tx| !matches!(tx.transaction, TransactionType::Mint(_)))
+        .collect::<Vec<_>>();
+
+    assert_eq!(COUNT, txs.len());
+    assert_eq!(
+        test_balance,
+        COUNT as u64 * context.faucet_config.dispense_amount
+    );
+
     assert_eq!(test_balance, context.faucet_config.dispense_amount);
 }
 
