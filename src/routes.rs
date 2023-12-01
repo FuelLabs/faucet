@@ -1,6 +1,6 @@
 use crate::{
     models::*, recaptcha, CoinOutput, SharedConfig, SharedFaucetState, SharedNetworkConfig,
-    SharedWallet,
+    SharedWallet, session::{SessionMap, Salt},
 };
 use axum::{
     response::{Html, IntoResponse, Response},
@@ -23,7 +23,7 @@ use handlebars::Handlebars;
 use reqwest::StatusCode;
 use secrecy::ExposeSecret;
 use serde_json::json;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::{
     collections::BTreeMap,
     io,
@@ -300,4 +300,54 @@ fn error(error: String) -> DispenseError {
         error,
         status: StatusCode::INTERNAL_SERVER_ERROR,
     }
+}
+
+
+
+impl IntoResponse for CreateSessionResponse {
+    fn into_response(self) -> Response {
+        (StatusCode::CREATED, Json(self)).into_response()
+    }
+}
+
+impl IntoResponse for CreateSessionError {
+    fn into_response(self) -> Response {
+        (
+            self.status,
+            Json(json!({
+                "error": self.error
+            })),
+        )
+            .into_response()
+    }
+}
+
+pub async fn create_session(
+    Json(input): Json<CreateSessionInput>,
+    Extension(sessions): Extension<Arc<Mutex<SessionMap>>>,
+) -> Result<CreateSessionResponse, CreateSessionError> {
+    // parse deposit address
+    let address = if let Ok(address) = Address::from_str(input.address.as_str()) {
+        Ok(address)
+    } else if let Ok(address) = Bech32Address::from_str(input.address.as_str()) {
+        Ok(address.into())
+    } else {
+        return Err(CreateSessionError {
+            status: StatusCode::BAD_REQUEST,
+            error: "invalid address".to_string(),
+        });
+    }?;
+
+    // Access and modify the session map within the handler
+    let mut map = sessions.lock().unwrap();
+    let salt = Salt::random();
+
+    map.insert(salt.clone(), address);
+
+    dbg!(map.get(&salt));
+
+    Ok(CreateSessionResponse {
+        status: "Success".to_owned(),
+        salt: hex::encode(salt.as_bytes())
+    })
 }
