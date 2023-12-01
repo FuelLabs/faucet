@@ -1,65 +1,40 @@
-var num;
-var isPrime = false;
-var firstMessagePostCompleted = false;
-onmessage = function(ev) {
-	num = parseInt(ev.data);
-	let temp = num;
-	if((temp <= 1) || (isNaN(temp))){
-		this.setTimeout(() => {
-			//this.postMessage("<b>" + temp + "</b>");
-			this.postMessage("<b>Primes are integers greater than one with no positive divisors besides one and itself. Please enter a number >= 2.</br>Reload to continue...</b>");
-		}, 300);
-		firstMessagePostCompleted = true;
+let work = false;
+
+onmessage = async function(ev) {
+	// Sanitize input
+	if(!ev || !ev.data) return;
+	
+	// If already working, stop
+	if(work) {
+		work = false;
+		return;
 	}
-	else if(temp == 2){
-		isPrime = true;
-		this.setTimeout(() => {
-			this.postMessage(temp);
-		}, 500);
-		firstMessagePostCompleted = true;
+	
+	const {fuelAddress, difficultyLevel} = ev.data;
+	const difficultyMatch = new Array(difficultyLevel).fill('0').join('');
+	work = true;
+
+	let i = 0;
+	let salt = getRandomSalt();
+
+	console.log("Working", difficultyLevel, fuelAddress);
+	
+	while(work) {
+		let buffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${fuelAddress}${salt}${i}`));
+		let hexString = Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+		if(hexString.substring(0, difficultyLevel) === difficultyMatch) {
+			this.postMessage(`Valid hash: ${hexString}`);
+		}
+		i++;
 	}
-	else if(!firstMessagePostCompleted && !isPrime){
-		let ctr = 0;
-		temp += 1;
-		for(let i = 2; i<=Math.sqrt(temp); i++){
-			if(temp % i == 0){
-				ctr++;
-				break;
-			}
-		}
-		if(ctr > 0){
-			this.setTimeout(() => {
-				//this.postMessage("<b>" + temp + "</b>");
-				this.postMessage(temp);
-			}, 500);
-			firstMessagePostCompleted = true;		
-		}
-		else{
-			isPrime = true;
-		}
-	}
-	else if(firstMessagePostCompleted && !isPrime){
-		let ctr = 0;
-		for(let i = 2; i<=Math.sqrt(temp); i++){
-			if(temp % i == 0){
-				ctr++;
-				break;
-			}
-		}
-		if(ctr > 0){
-			this.setTimeout(() => {
-				//this.postMessage("<b>" + temp + "</b>");
-				this.postMessage(temp);
-			}, 500);
-		}
-		else{
-			isPrime = true;
-		}
-	}
-	else if(firstMessagePostCompleted && isPrime){
-		this.setTimeout(() => {
-			//this.postMessage("<b>" + temp + "</b>");
-			this.postMessage("The next prime number after your input is : " + "<b>" + temp + "</b></br>End of program.</br>------------------------------------------------------------------------------------------------------------------------------");
-		}, 300);	
-	}	
+
+	this.postMessage("Finished");
+}
+
+function getRandomSalt() {
+	// Generate a random salt
+    let saltArray = new Uint8Array(32);
+    crypto.getRandomValues(saltArray);
+    return Array.from(saltArray).map(b => b.toString(16).padStart(2, '0')).join('');
 }
