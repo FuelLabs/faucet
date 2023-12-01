@@ -1494,6 +1494,7 @@ dependencies = [
  "fuels-core",
  "futures",
  "handlebars",
+ "hex",
  "insta",
  "lazy_static",
  "memoize",

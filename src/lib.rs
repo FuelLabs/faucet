@@ -3,6 +3,7 @@ use crate::{
     constants::{MAX_CONCURRENT_REQUESTS, WALLET_SECRET_DEV_KEY},
     dispense_tracker::DispenseTracker,
     routes::health,
+    session::SessionMap,
 };
 use anyhow::anyhow;
 use axum::{
@@ -36,6 +37,7 @@ use tracing::info;
 
 pub mod config;
 pub mod models;
+pub mod session;
 
 mod constants;
 mod dispense_tracker;
@@ -146,6 +148,9 @@ pub async fn start_server(
     info!("Faucet Account: {:#x}", Address::from(wallet.address()));
     info!("Faucet Balance: {}", balance);
 
+    let sessions = Arc::new(Mutex::new(SessionMap::new()));
+
+
     // setup routes
     let app = Router::new()
         .route(
@@ -192,6 +197,18 @@ pub async fn start_server(
                         .allow_methods(Any)
                         .allow_headers(Any),
                 )
+                .into_inner(),
+        )
+        .route("/session", post(routes::create_session))
+        .layer(
+            ServiceBuilder::new()
+                // Handle errors from middleware
+                .layer(HandleErrorLayer::new(handle_error))
+                .load_shed()
+                .concurrency_limit(MAX_CONCURRENT_REQUESTS)
+                .timeout(Duration::from_secs(60))
+                .layer(TraceLayer::new_for_http())
+                .layer(Extension(sessions))
                 .into_inner(),
         );
 
