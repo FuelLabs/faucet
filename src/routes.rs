@@ -437,7 +437,7 @@ pub async fn create_session(
     Ok(CreateSessionResponse {
         status: "Success".to_owned(),
         salt: hex::encode(salt.as_bytes()),
-        difficulty: *pow_difficulty
+        difficulty: *pow_difficulty,
     })
 }
 
