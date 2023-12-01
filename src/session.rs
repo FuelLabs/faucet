@@ -6,6 +6,10 @@ use std::collections::HashMap;
 pub struct Salt([u8; 32]);
 
 impl Salt {
+    pub fn new(bytes: [u8; 32]) -> Self {
+        Salt(bytes)
+    }
+
     pub fn random() -> Self {
         let mut rng = rand::thread_rng();
         let mut bytes = [0u8; 32];

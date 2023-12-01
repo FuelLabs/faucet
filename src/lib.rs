@@ -192,6 +192,8 @@ pub async fn start_server(
                 )
                 .into_inner(),
         )
+        .route("/session", get(routes::get_session))
+        .layer(Extension(sessions.clone()))
         .route("/session", post(routes::create_session))
         .layer(
             ServiceBuilder::new()
@@ -201,7 +203,7 @@ pub async fn start_server(
                 .concurrency_limit(MAX_CONCURRENT_REQUESTS)
                 .timeout(Duration::from_secs(60))
                 .layer(TraceLayer::new_for_http())
-                .layer(Extension(sessions))
+                .layer(Extension(sessions.clone()))
                 .into_inner(),
         );
 
