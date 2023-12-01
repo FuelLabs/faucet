@@ -4,6 +4,7 @@ use crate::{
     session::{SessionMap, Salt},
 };
 use axum::{
+    extract::Query,
     response::{Html, IntoResponse, Response},
     routing::{get_service, MethodRouter},
     Extension, Json,
@@ -22,8 +23,10 @@ use fuels_core::types::{
 };
 use fuels_core::types::{input::Input, transaction_builders::ScriptTransactionBuilder};
 use handlebars::Handlebars;
+use hex::FromHexError;
 use reqwest::StatusCode;
 use secrecy::ExposeSecret;
+use serde::Deserialize;
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 use std::{
@@ -66,13 +69,11 @@ pub fn serve_worker() -> MethodRouter {
     let template = concat!(env!("OUT_DIR"), "/worker.js");
 
     async fn handle_error(_err: io::Error) -> impl IntoResponse {
-        dbg!(_err);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "Could not serve worker.js",
         )
     }
-    dbg!(template);
     get_service(ServeFile::new(template)).handle_error(handle_error)
 }
 
@@ -415,20 +416,71 @@ pub async fn create_session(
     } else {
         return Err(CreateSessionError {
             status: StatusCode::BAD_REQUEST,
-            error: "invalid address".to_string(),
+            error: "invalid address".to_owned(),
         });
     }?;
 
-    // Access and modify the session map within the handler
-    let mut map = sessions.lock().unwrap();
+    let mut map = match sessions.lock() {
+        Ok(val) => val,
+        Err(_) => {
+            return Err(CreateSessionError {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                error: "Could not acquire sessions lock".to_owned(),
+            })
+        }
+    };
     let salt = Salt::random();
 
     map.insert(salt.clone(), address);
-
-    dbg!(map.get(&salt));
 
     Ok(CreateSessionResponse {
         status: "Success".to_owned(),
         salt: hex::encode(salt.as_bytes()),
     })
+}
+
+#[derive(Deserialize)]
+pub struct SessionQuery {
+    salt: String,
+}
+
+pub async fn get_session(
+    query: Query<SessionQuery>,
+    Extension(sessions): Extension<Arc<Mutex<SessionMap>>>,
+) -> Response {
+    let salt: Result<[u8; 32], _> = hex::decode(&query.salt).and_then(|value| {
+        value
+            .try_into()
+            .map_err(|_| FromHexError::InvalidStringLength)
+    });
+
+    match salt {
+        Ok(value) => value,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "Invalid salt"})),
+            )
+                .into_response()
+        }
+    };
+
+    let map = match sessions.lock() {
+        Ok(val) => val,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Could not acquire sessions lock"})),
+            )
+                .into_response()
+        }
+    };
+
+    let result = map.get(&Salt::new(salt.unwrap()));
+
+    match result {
+        Some(address) => (StatusCode::OK, Json(json!({"address": address}))),
+        None => (StatusCode::NOT_FOUND, Json(json!({}))),
+    }
+    .into_response()
 }

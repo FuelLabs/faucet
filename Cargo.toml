@@ -28,9 +28,9 @@ serde_json = { version = "1.0" }
 tokio = { version = "1.0", features = ["full"] }
 tower = { version = "0.4", features = ["buffer", "limit", "load-shed", "util", "timeout"] }
 tower-http = { version = "0.2.5", features = ["cors", "trace", "set-header", "fs"] }
+rand = "0.8.5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-rand = "0.8.5"
 
 [dev-dependencies]
 fuel-core = { version = "0.22.0", default-features = false }
