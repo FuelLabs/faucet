@@ -18,6 +18,7 @@ pub const DEFAULT_PORT: u16 = 3000;
 
 pub const MIN_GAS_PRICE: &str = "MIN_GAS_PRICE";
 pub const TIMEOUT_SECONDS: &str = "TIMEOUT_SECONDS";
+pub const POW_DIFFICULTY: &str = "POW_DIFFICULTY";
 
 // HTTP config
 
