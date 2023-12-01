@@ -34,6 +34,7 @@ pub struct CreateSessionInput {
 pub struct CreateSessionResponse {
     pub status: String,
     pub salt: String,
+    pub difficulty: u8,
 }
 
 #[derive(Debug)]

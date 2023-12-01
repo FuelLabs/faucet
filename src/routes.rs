@@ -407,6 +407,7 @@ impl IntoResponse for CreateSessionError {
 pub async fn create_session(
     Json(input): Json<CreateSessionInput>,
     Extension(sessions): Extension<Arc<Mutex<SessionMap>>>,
+    Extension(pow_difficulty): Extension<Arc<u8>>,
 ) -> Result<CreateSessionResponse, CreateSessionError> {
     // parse deposit address
     let address = if let Ok(address) = Address::from_str(input.address.as_str()) {
@@ -436,6 +437,7 @@ pub async fn create_session(
     Ok(CreateSessionResponse {
         status: "Success".to_owned(),
         salt: hex::encode(salt.as_bytes()),
+        difficulty: *pow_difficulty
     })
 }
 

@@ -147,8 +147,10 @@ pub async fn start_server(
         .sum::<u64>();
     info!("Faucet Account: {:#x}", Address::from(wallet.address()));
     info!("Faucet Balance: {}", balance);
-
+    
+    let pow_difficulty = service_config.pow_difficulty;
     let sessions = Arc::new(Mutex::new(SessionMap::new()));
+    
 
     // setup routes
     let app = Router::new()
@@ -210,6 +212,7 @@ pub async fn start_server(
                 .timeout(Duration::from_secs(60))
                 .layer(TraceLayer::new_for_http())
                 .layer(Extension(sessions.clone()))
+                .layer(Extension(Arc::new(pow_difficulty)))
                 .into_inner(),
         );
 
