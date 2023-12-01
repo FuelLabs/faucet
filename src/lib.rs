@@ -1,7 +1,8 @@
 use crate::{
     config::Config,
     constants::{MAX_CONCURRENT_REQUESTS, WALLET_SECRET_DEV_KEY},
-    routes::health, session::SessionMap,
+    routes::health,
+    session::SessionMap,
 };
 use anyhow::anyhow;
 use axum::{
@@ -143,7 +144,6 @@ pub async fn start_server(
     info!("Faucet Balance: {}", balance);
 
     let sessions = Arc::new(Mutex::new(SessionMap::new()));
-
 
     // setup routes
     let app = Router::new()

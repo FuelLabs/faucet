@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use fuel_types::Address;
 use rand::Rng;
+use std::collections::HashMap;
 
 #[derive(Eq, Hash, PartialEq, Clone)]
 pub struct Salt([u8; 32]);
@@ -17,7 +17,6 @@ impl Salt {
         &self.0
     }
 }
-
 
 pub type Pow = (Address, Salt, u64);
 
