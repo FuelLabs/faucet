@@ -5,7 +5,8 @@ use crate::{
 };
 use axum::{
     response::{Html, IntoResponse, Response},
-    Extension, Json, routing::{get_service, MethodRouter},
+    routing::{get_service, MethodRouter},
+    Extension, Json,
 };
 
 use fuel_core_client::client::FuelClient;
@@ -63,17 +64,17 @@ pub fn render_page(public_node_url: String, captcha_key: Option<String>) -> Stri
 #[memoize::memoize]
 pub fn serve_worker() -> MethodRouter {
     let template = concat!(env!("OUT_DIR"), "/worker.js");
-    
+
     async fn handle_error(_err: io::Error) -> impl IntoResponse {
         dbg!(_err);
-        (StatusCode::INTERNAL_SERVER_ERROR, "Could not serve worker.js")
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Could not serve worker.js",
+        )
     }
     dbg!(template);
-    get_service(
-        ServeFile::new(template)
-    ).handle_error(handle_error)
+    get_service(ServeFile::new(template)).handle_error(handle_error)
 }
-
 
 pub async fn main(Extension(config): Extension<SharedConfig>) -> Html<String> {
     let public_node_url = config.public_node_url.clone();
@@ -384,8 +385,6 @@ fn error(error: String, status: StatusCode) -> DispenseError {
     DispenseError { error, status }
 }
 
-
-
 impl IntoResponse for CreateSessionResponse {
     fn into_response(self) -> Response {
         (StatusCode::CREATED, Json(self)).into_response()
@@ -430,6 +429,6 @@ pub async fn create_session(
 
     Ok(CreateSessionResponse {
         status: "Success".to_owned(),
-        salt: hex::encode(salt.as_bytes())
+        salt: hex::encode(salt.as_bytes()),
     })
 }

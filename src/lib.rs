@@ -150,7 +150,6 @@ pub async fn start_server(
 
     let sessions = Arc::new(Mutex::new(SessionMap::new()));
 
-
     // setup routes
     let app = Router::new()
         .route(
