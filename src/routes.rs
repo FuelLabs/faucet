@@ -328,6 +328,7 @@ pub async fn create_session(
     Json(input): Json<CreateSessionInput>,
     Extension(sessions): Extension<Arc<Mutex<SessionMap>>>,
     Extension(pow_difficulty): Extension<Arc<u8>>,
+    Extension(config): Extension<SharedConfig>,
 ) -> Result<CreateSessionResponse, CreateSessionError> {
     // parse deposit address
     let address = if let Ok(address) = Address::from_str(input.address.as_str()) {
@@ -340,6 +341,19 @@ pub async fn create_session(
             error: "invalid address".to_owned(),
         });
     }?;
+
+    // verify captcha
+    if let Some(s) = config.captcha_secret.clone() {
+        recaptcha::verify(s.expose_secret(), input.captcha.as_str(), None)
+            .await
+            .map_err(|e| {
+                tracing::error!("{}", e);
+                CreateSessionError {
+                    error: "captcha failed".to_owned(),
+                    status: StatusCode::UNAUTHORIZED,
+                }
+            })?;
+    }
 
     let mut map = match sessions.lock() {
         Ok(val) => val,

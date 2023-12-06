@@ -206,6 +206,7 @@ pub async fn start_server(
                 .layer(TraceLayer::new_for_http())
                 .layer(Extension(sessions.clone()))
                 .layer(Extension(Arc::new(pow_difficulty)))
+                .layer(Extension(Arc::new(service_config.clone())))
                 .into_inner(),
         );
 
