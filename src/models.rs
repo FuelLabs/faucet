@@ -28,6 +28,7 @@ pub struct DispenseError {
 #[derive(Deserialize, Debug)]
 pub struct CreateSessionInput {
     pub address: String,
+    pub captcha: String,
 }
 
 #[derive(Serialize, Debug)]

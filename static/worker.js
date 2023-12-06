@@ -1,41 +1,46 @@
 let work = false;
 
-onmessage = async function(ev) {
-	
-	// If already working, stop
-	if(work) {
-		work = false;
-		return;
-	}
-	
-	// Sanitize input
-	if(!ev || !ev.data) return;
-	
-	const {fuelAddress, difficultyLevel} = ev.data;
-	const difficultyMatch = new Array(difficultyLevel).fill('0').join('');
-	work = true;
+onmessage = async function (ev) {
+  // If already working, stop
+  if (work) {
+    work = false;
+    return;
+  }
 
-	let i = 0;
-	let salt = getRandomSalt();
+  // Sanitize input
+  if (!ev || !ev.data) return;
 
-	console.log("Working", difficultyLevel, fuelAddress);
+  const { difficultyLevel, salt } = ev.data;
+  const difficultyMatch = new Array(difficultyLevel).fill("0").join("");
+  work = true;
 
-	while(work) {
-		let buffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${fuelAddress}${salt}${i}`));
-		let hexString = Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+  let i = 0;
 
-		if(hexString.substring(0, difficultyLevel) === difficultyMatch) {
-			this.postMessage(`Valid hash: ${hexString}`);
-		}
-		i++;
-	}
+  console.log("Working", difficultyLevel, salt);
 
-	this.postMessage("Finished");
-}
+  while (work) {
+    let buffer = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(`${salt}${i}`)
+    );
+    let hexString = Array.from(new Uint8Array(buffer))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
+    if (hexString.substring(0, difficultyLevel) === difficultyMatch) {
+      this.postMessage(`Valid hash: ${hexString}`);
+    }
+    i++;
+  }
+
+  this.postMessage("Finished");
+};
 
 function getRandomSalt() {
-	// Generate a random salt
-    let saltArray = new Uint8Array(32);
-    crypto.getRandomValues(saltArray);
-    return Array.from(saltArray).map(b => b.toString(16).padStart(2, '0')).join('');
+  // Generate a random salt
+  let saltArray = new Uint8Array(32);
+  crypto.getRandomValues(saltArray);
+  return Array.from(saltArray)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }

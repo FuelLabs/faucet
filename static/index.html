@@ -1,326 +1,370 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-  <meta charset="UTF-8" />
-  <title>{{ page_title }}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet" />
-  <script src="https://www.google.com/recaptcha/api.js"></script>
-</head>
-<style>
-  * {
-    font-family: "Roboto", sans-serif;
-  }
-
-  body {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
-  }
-
-  .description {
-    text-align: center;
-    line-height: 1.4em;
-    color: #555;
-    font-size: 14px;
-  }
-
-  .background {
-    position: fixed;
-    top: 0;
-    left: 0;
-    height: 100%;
-    width: 100%;
-    z-index: 0;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='%230f172a' stroke-opacity='0.04'%3E%3Cpath d='M0 .5H31.5V32' /%3E%3C/svg%3E%0A");
-    -webkit-mask-image: linear-gradient(180deg,
-        rgba(255, 255, 255, 1),
-        rgba(255, 255, 255, 1),
-        rgba(255, 255, 255, 0.3));
-    mask-image: linear-gradient(180deg,
-        rgba(255, 255, 255, 1),
-        rgba(255, 255, 255, 1),
-        rgba(255, 255, 255, 0.3));
-  }
-
-  .fuel-logo {
-    display: flex;
-    justify-content: center;
-    margin-bottom: 20px;
-  }
-
-  .button {
-    background-color: #00F58C;
-    border: none;
-    color: black;
-    padding: 16px 32px;
-    margin: 4px 2px;
-    cursor: pointer;
-    border-radius: 10px;
-    width: 100%;
-    text-transform: uppercase;
-    text-decoration: none;
-    display: flex;
-    box-sizing: border-box;
-    text-align: center;
-    justify-content: center;
-  }
-
-  .button:disabled {
-    background-color: gray;
-  }
-
-  .card {
-    margin-top: 90px;
-    z-index: 1;
-    width: 480px;
-    font-size: 14px;
-    padding: 40px 20px 20px 20px;
-    border-radius: 10px;
-    background-color: white;
-    box-shadow: 0 0 16px 2px rgba(248, 248, 248, 0.25);
-    border: 1px solid rgb(229, 231, 235);
-    max-width: 95%;
-  }
-
-  .from-control {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .from-control label {
-    margin-bottom: 0.3em;
-    color: #333;
-  }
-
-  .from-control input {
-    border: 1px solid #888;
-    border-radius: 4px;
-    padding: 10px;
-  }
-
-  .from-control input:invalid {
-    border: 1px solid red;
-  }
-
-  .captcha-container {
-    display: flex;
-    margin-top: 20px;
-    justify-content: center;
-  }
-
-  .bold {
-    color: #000;
-    font-weight: bold;
-  }
-
-  .response-title,
-  .provider-url,
-  #response-failure {
-    text-align: center;
-  }
-
-  #response-failure {
-    color: red;
-    padding: 10px;
-  }
-
-  #response {
-    display: none;
-  }
-
-  .provider-url {
-    font-size: 12px;
-    text-align: center;
-    margin-top: 10px;
-    color: #949494;
-  }
-
-  .queued {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: 1rem;
-  }
-
-  .captcha-area {
-    height: 100px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-
-  .loader {
-    border: 0.4rem solid #f3f3f3;
-    border-top: 0.4rem solid #00F58C;
-    border-radius: 50%;
-    width: 2rem;
-    height: 2rem;
-    animation: spin 2s linear infinite;
-  }
-
-  @keyframes spin {
-    0% {
-      transform: rotate(0deg);
+  <head>
+    <meta charset="UTF-8" />
+    <title>{{ page_title }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://www.google.com/recaptcha/api.js"></script>
+  </head>
+  <style>
+    * {
+      font-family: "Roboto", sans-serif;
     }
 
-    100% {
-      transform: rotate(360deg);
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
     }
-  }
 
-  .hidden {
-    display: none;
-  }
-</style>
+    .description {
+      text-align: center;
+      line-height: 1.4em;
+      color: #555;
+      font-size: 14px;
+    }
 
-<body>
-  <div class="background"></div>
-  <div class="card">
-    <div class="fuel-logo">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" style="width: 80px; height: 80px"
-        class="s_logo__16erN">
-        <g data-name="Fuel logo">
-          <g g clip-path="url(#a)" data-name="logo">
-            <path fill="#00F58C" d="M28.85,0C12.92,0,0,12.92,0,28.85V434h359.09c12.15,0,23.81-4.83,32.4-13.42l29.09-29.09
-         c8.59-8.59,13.42-20.25,13.42-32.4V0H28.85z" />
+    .background {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 100%;
+      z-index: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='%230f172a' stroke-opacity='0.04'%3E%3Cpath d='M0 .5H31.5V32' /%3E%3C/svg%3E%0A");
+      -webkit-mask-image: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 1),
+        rgba(255, 255, 255, 1),
+        rgba(255, 255, 255, 0.3)
+      );
+      mask-image: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 1),
+        rgba(255, 255, 255, 1),
+        rgba(255, 255, 255, 0.3)
+      );
+    }
+
+    .fuel-logo {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .button {
+      background-color: #00f58c;
+      border: none;
+      color: black;
+      padding: 16px 32px;
+      margin: 4px 2px;
+      cursor: pointer;
+      border-radius: 10px;
+      width: 100%;
+      text-transform: uppercase;
+      text-decoration: none;
+      display: flex;
+      box-sizing: border-box;
+      text-align: center;
+      justify-content: center;
+    }
+
+    .button:disabled {
+      background-color: gray;
+    }
+
+    .card {
+      margin-top: 90px;
+      z-index: 1;
+      width: 480px;
+      font-size: 14px;
+      padding: 40px 20px 20px 20px;
+      border-radius: 10px;
+      background-color: white;
+      box-shadow: 0 0 16px 2px rgba(248, 248, 248, 0.25);
+      border: 1px solid rgb(229, 231, 235);
+      max-width: 95%;
+    }
+
+    .from-control {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .from-control label {
+      margin-bottom: 0.3em;
+      color: #333;
+    }
+
+    .from-control input {
+      border: 1px solid #888;
+      border-radius: 4px;
+      padding: 10px;
+    }
+
+    .from-control input:invalid {
+      border: 1px solid red;
+    }
+
+    .captcha-container {
+      display: flex;
+      margin-top: 20px;
+      justify-content: center;
+    }
+
+    .bold {
+      color: #000;
+      font-weight: bold;
+    }
+
+    .response-title,
+    .provider-url,
+    #response-failure {
+      text-align: center;
+    }
+
+    #response-failure {
+      color: red;
+      padding: 10px;
+    }
+
+    #response {
+      display: none;
+    }
+
+    .provider-url {
+      font-size: 12px;
+      text-align: center;
+      margin-top: 10px;
+      color: #949494;
+    }
+
+    .queued {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 1rem;
+    }
+
+    .captcha-area {
+      height: 100px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .loader {
+      border: 0.4rem solid #f3f3f3;
+      border-top: 0.4rem solid #00f58c;
+      border-radius: 50%;
+      width: 2rem;
+      height: 2rem;
+      animation: spin 2s linear infinite;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+
+  <body>
+    <div class="background"></div>
+    <div class="card">
+      <div class="fuel-logo">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 500 500"
+          style="width: 80px; height: 80px"
+          class="s_logo__16erN"
+        >
+          <g data-name="Fuel logo">
+            <g g clip-path="url(#a)" data-name="logo">
+              <path
+                fill="#00F58C"
+                d="M28.85,0C12.92,0,0,12.92,0,28.85V434h359.09c12.15,0,23.81-4.83,32.4-13.42l29.09-29.09
+         c8.59-8.59,13.42-20.25,13.42-32.4V0H28.85z"
+              />
+            </g>
+            <path
+              d="M283.36,55.8L142.22,196.94c-3.5,3.5-8.25,5.47-13.21,5.47h0c-7.22,0-13.8-4.16-16.89-10.69L57.45,76.11
+       c-4.46-9.44,2.42-20.31,12.86-20.31H283.36z"
+            />
+            <path
+              d="M55.8,378.2V240.87c0-7.32,5.94-13.26,13.26-13.26h137.33L55.8,378.2z"
+            />
+            <path
+              d="M217.72,202.41h-45.46l136.8-136.81c6.28-6.28,14.79-9.81,23.67-9.81h45.46l-136.8,136.81
+       C235.12,198.88,226.6,202.41,217.72,202.41z"
+            />
           </g>
-          <path d="M283.36,55.8L142.22,196.94c-3.5,3.5-8.25,5.47-13.21,5.47h0c-7.22,0-13.8-4.16-16.89-10.69L57.45,76.11
-       c-4.46-9.44,2.42-20.31,12.86-20.31H283.36z" />
-          <path d="M55.8,378.2V240.87c0-7.32,5.94-13.26,13.26-13.26h137.33L55.8,378.2z" />
-          <path d="M217.72,202.41h-45.46l136.8-136.81c6.28-6.28,14.79-9.81,23.67-9.81h45.46l-136.8,136.81
-       C235.12,198.88,226.6,202.41,217.72,202.41z" />
-        </g>
-      </svg>
-
-
-    </div>
-    <form action="javascript:" onsubmit="faucetApp.give_me_coins(this)" id="form">
-      <div class="from-control">
-        <label for="address">Wallet Address</label>
-        <input type="text" id="address" name="address" autocomplete="off" minlength="63"
-          placeholder="fuel100000... or 0x0000..." value="fuel1z9a0np9dwp236q2643qdsrrk3l85cetju5pfqcdlrj0lqalh2c7s3uqxsq" pattern="[a-z0-9]{63,66}" />
+        </svg>
       </div>
-      <p class="description">
-        This is a <b class="bold">Test Ether</b> faucet running on the
-        <b class="bold">Test Fuel network</b>. This faucet sends fake Ether
-        assets to the provided wallet address.
-      </p>
-      <div class="captcha-area">
-        {{#if captcha_key}}
+      <form
+        action="javascript:"
+        onsubmit="faucetApp.give_me_coins(this)"
+        id="form"
+      >
+        <div class="from-control">
+          <label for="address">Wallet Address</label>
+          <input
+            type="text"
+            id="address"
+            name="address"
+            autocomplete="off"
+            minlength="63"
+            placeholder="fuel100000... or 0x0000..."
+            value="fuel1z9a0np9dwp236q2643qdsrrk3l85cetju5pfqcdlrj0lqalh2c7s3uqxsq"
+            pattern="[a-z0-9]{63,66}"
+          />
+        </div>
+        <p class="description">
+          This is a <b class="bold">Test Ether</b> faucet running on the
+          <b class="bold">Test Fuel network</b>. This faucet sends fake Ether
+          assets to the provided wallet address.
+        </p>
+        <div class="captcha-area">
+          {{#if captcha_key}}
           <div class="captcha-container">
             <div class="g-recaptcha" data-sitekey="{{ captcha_key }}"></div>
           </div>
-        {{/if}}
-        <div class="queued hidden">
-          <div class="loader"></div>
-          <div>Waiting until more tokens are available</div>
+          {{/if}}
+          <div class="queued hidden">
+            <div class="loader"></div>
+            <div>Waiting until more tokens are available</div>
+          </div>
         </div>
+        <div id="response-failure"></div>
+        <input type="submit" value="Give me Ether" class="button" />
+      </form>
+      <div id="response">
+        <h2 class="response-title">Test Ether sent to the wallet</h2>
+        <a href="#" id="explorer-link" class="button">See on Fuel Explorer</a>
       </div>
-      <div id="response-failure"></div>
-      <input type="submit" value="Give me Ether" class="button" />
-    </form>
-    <div id="response">
-      <h2 class="response-title">Test Ether sent to the wallet</h2>
-      <a href="#" id="explorer-link" class="button">See on Fuel Explorer</a>
     </div>
-  </div>
-  <div class="provider-url">Node url: {{ public_node_url }}</div>
-  <script>
-    const faucetApp = (function () {
-      let providerUrl = "{{ public_node_url }}";
-      let blockExplorer = "https://fuellabs.github.io/block-explorer-v2";
-      let query = params = new URLSearchParams(document.location.search);
-      let address = query.get('address');
-      let worker = new Worker('./worker.js');
+    <div class="provider-url">Node url: {{ public_node_url }}</div>
+    <script>
+      const faucetApp = (function () {
+        let providerUrl = "{{ public_node_url }}";
+        let blockExplorer = "https://fuellabs.github.io/block-explorer-v2";
+        let query = (params = new URLSearchParams(document.location.search));
+        let address = query.get("address");
+        let worker = new Worker("./worker.js");
 
-      worker.onmessage = function(event){
-        console.log(event.data);
-      };
-
-      if (address) {
-        let $address = document.getElementById('address');
-        if ($address) {
-          $address.value = address;
-        }
-      }
-
-      function hasCaptcha() {
-        return !!document.getElementsByClassName("captcha-container")[0];
-      }
-
-      function showWaiting() {
-        if (hasCaptcha()) {
-          document.getElementsByClassName("captcha-container")[0].classList.add("hidden");
-        }
-        document.getElementsByClassName("queued")[0].classList.remove("hidden");
-        form.querySelector("input[type=submit]").disabled = true;
-      }
-
-      function hideWaiting() {
-        if (hasCaptcha()) {
-          document.getElementsByClassName("captcha-container")[0].classList.remove("hidden");
-        }
-        document.getElementsByClassName("queued")[0].classList.add("hidden");
-        form.querySelector("input[type=submit]").disabled = false;
-      }
-      
-
-      function give_me_coins(form) {
-        worker.postMessage({fuelAddress: form["address"].value, difficultyLevel: 6});
-        
-
-        // const data = {
-        //   address: form["address"].value,
-        //   captcha: "",
-        // };
-
-        // if (hasCaptcha()) {
-        //   data.captcha = form["g-recaptcha-response"].value;
-        // }
-
-        // let xhr = new XMLHttpRequest();
-        // xhr.open("POST", "/dispense");
-        // xhr.setRequestHeader("Accept", "application/json");
-        // xhr.setRequestHeader("Content-Type", "application/json");
-        // xhr.onload = () =>
-        //   handle_response(data.address)(JSON.parse(xhr.responseText));
-        // xhr.onetimeout = () => handle_error("Connection to the server timed out");
-        // xhr.onerror = () => handle_error("Connection to the server failed");
-        // xhr.send(JSON.stringify(data));
-
-        // document.getElementById("response-failure").innerText = "";
-        // showWaiting();
-      }
-
-      function handle_response(address) {
-        return function (data) {
-          if (!data.error) {
-            document.getElementById("form").hidden = true;
-            document.getElementById("response").style.display = "block";
-            document.getElementById(
-              "explorer-link"
-            ).href = `${blockExplorer}/address/${address}?providerUrl=${encodeURIComponent(
-              providerUrl
-            )}`;
-          } else {
-            document.getElementById("response-failure").innerText = data.error;
-            hideWaiting();
-          }
+        worker.onmessage = function (event) {
+          console.log(event.data);
         };
-      }
 
-      function handle_error(message) {
-        document.getElementById("response-failure").innerText = message;
-        hideWaiting();
-      }
+        if (address) {
+          let $address = document.getElementById("address");
+          if ($address) {
+            $address.value = address;
+          }
+        }
 
-      return { give_me_coins: give_me_coins };
-    })();
-  </script>
-</body>
+        function hasCaptcha() {
+          return !!document.getElementsByClassName("captcha-container")[0];
+        }
 
+        function showWaiting() {
+          if (hasCaptcha()) {
+            document
+              .getElementsByClassName("captcha-container")[0]
+              .classList.add("hidden");
+          }
+          document
+            .getElementsByClassName("queued")[0]
+            .classList.remove("hidden");
+          form.querySelector("input[type=submit]").disabled = true;
+        }
+
+        function hideWaiting() {
+          if (hasCaptcha()) {
+            document
+              .getElementsByClassName("captcha-container")[0]
+              .classList.remove("hidden");
+          }
+          document.getElementsByClassName("queued")[0].classList.add("hidden");
+          form.querySelector("input[type=submit]").disabled = false;
+        }
+
+        function give_me_coins(form) {
+          const data = {
+            address: form["address"].value,
+            captcha: "",
+          };
+
+          if (hasCaptcha()) {
+            data.captcha = form["g-recaptcha-response"].value;
+          }
+
+          let xhr = new XMLHttpRequest();
+          xhr.open("POST", "/session");
+          xhr.setRequestHeader("Accept", "application/json");
+          xhr.setRequestHeader("Content-Type", "application/json");
+          xhr.onload = () =>
+            handle_session_response(data.address)(JSON.parse(xhr.responseText));
+          xhr.onetimeout = () =>
+            handle_error("Connection to the server timed out");
+          xhr.onerror = () => handle_error("Connection to the server failed");
+          xhr.send(JSON.stringify(data));
+
+          document.getElementById("response-failure").innerText = "";
+          showWaiting();
+        }
+
+        function handle_session_response(address) {
+          return function (data) {
+            if (data.error) {
+              document.getElementById("response-failure").innerText =
+                data.error;
+              hideWaiting();
+              return;
+            }
+
+            console.log(data);
+
+            // document.getElementById("form").hidden = true;
+            // document.getElementById("response").style.display = "block";
+            // document.getElementById(
+            //   "explorer-link"
+            // ).href = `${blockExplorer}/address/${address}?providerUrl=${encodeURIComponent(
+            //   providerUrl
+            // )}`;
+
+            // worker.postMessage({
+            //   fuelAddress: form["address"].value,
+            //   difficultyLevel: 6,
+            // });
+          };
+        }
+
+        function handle_dispense_response() {
+          console.log("handle_dispense_response()");
+        }
+
+        function handle_error(message) {
+          document.getElementById("response-failure").innerText = message;
+          hideWaiting();
+        }
+
+        return { give_me_coins: give_me_coins };
+      })();
+    </script>
+  </body>
 </html>
