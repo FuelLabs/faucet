@@ -1,9 +1,9 @@
-let work = false;
+let working = false;
 
 onmessage = async function (ev) {
   // If already working, stop
-  if (work) {
-    work = false;
+  if (working) {
+    working = false;
     return;
   }
 
@@ -12,13 +12,13 @@ onmessage = async function (ev) {
 
   const { difficultyLevel, salt } = ev.data;
   const difficultyMatch = new Array(difficultyLevel).fill("0").join("");
-  work = true;
+  working = true;
 
   let i = 0;
 
   console.log("Working", difficultyLevel, salt);
 
-  while (work) {
+  while (working) {
     let buffer = await crypto.subtle.digest(
       "SHA-256",
       new TextEncoder().encode(`${salt}${i}`)
@@ -28,12 +28,15 @@ onmessage = async function (ev) {
       .join("");
 
     if (hexString.substring(0, difficultyLevel) === difficultyMatch) {
-      this.postMessage(`Valid hash: ${hexString}`);
+      this.postMessage({
+        type: "hash",
+        value: { salt, nonce: i, hash: hexString },
+      });
     }
     i++;
   }
 
-  this.postMessage("Finished");
+  this.postMessage({ type: "finish" });
 };
 
 function getRandomSalt() {
