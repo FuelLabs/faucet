@@ -1,7 +1,5 @@
 use crate::{
-    models::*, recaptcha, CoinOutput, SharedConfig, SharedDispenseTracker, SharedFaucetState,
-    SharedNetworkConfig, SharedWallet,
-    session::{SessionMap, Salt},
+    models::*, recaptcha, session::{Salt, SessionMap}, CoinOutput, SharedConfig, SharedDispenseTracker, SharedFaucetState, SharedNetworkConfig, SharedSessions, SharedWallet
 };
 use axum::{
     extract::Query,
@@ -28,13 +26,15 @@ use reqwest::StatusCode;
 use secrecy::ExposeSecret;
 use serde::Deserialize;
 use serde_json::json;
-use std::sync::{Arc, Mutex};
+use sha2::{ Sha256, Digest };
+use std::sync::Arc;
 use std::{
     collections::BTreeMap,
     io,
     str::FromStr,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use num_bigint::BigUint;
 use tower_http::services::ServeFile;
 use tracing::{error, info};
 
@@ -229,31 +229,44 @@ pub async fn dispense_tokens(
     Extension(config): Extension<SharedConfig>,
     Extension(client): Extension<Arc<FuelClient>>,
     Extension(network_config): Extension<SharedNetworkConfig>,
+    Extension(sessions): Extension<SharedSessions>,
     Extension(dispense_tracker): Extension<SharedDispenseTracker>,
 ) -> Result<DispenseResponse, DispenseError> {
-    // parse deposit address
-    let address = if let Ok(address) = Address::from_str(input.address.as_str()) {
-        Ok(address)
-    } else if let Ok(address) = Bech32Address::from_str(input.address.as_str()) {
-        Ok(address.into())
-    } else {
-        return Err(error(
-            "invalid address".to_string(),
-            StatusCode::BAD_REQUEST,
-        ));
-    }?;
+    let salt: [u8; 32] = hex::decode(&input.salt)
+        .and_then(|value| {
+            value
+                .try_into()
+                .map_err(|_| FromHexError::InvalidStringLength)
+        })
+        .map_err(|_| DispenseError {
+            status: StatusCode::BAD_REQUEST,
+            error: "Invalid salt".to_string(),
+        })?;
+        
+    let address = match sessions.lock().await.get(&Salt::new(salt)) {
+        Some(value) => value.clone(),
+        None => {
+            return Err(DispenseError {
+                status: StatusCode::NOT_FOUND,
+                error: "Salt does not exist".to_string(),
+            })
+        }
+    };
 
-    // verify captcha
-    if let Some(s) = config.captcha_secret.clone() {
-        recaptcha::verify(s.expose_secret(), input.captcha.as_str(), None)
-            .await
-            .map_err(|e| {
-                tracing::error!("{}", e);
-                DispenseError {
-                    error: "captcha failed".to_string(),
-                    status: StatusCode::UNAUTHORIZED,
-                }
-            })?;
+    let mut hasher = Sha256::new();
+    hasher.update(input.salt.as_bytes());
+    hasher.update(input.nonce.as_bytes());
+    let hash: [u8; 32] = hasher.finalize().into();
+    let hash_uint = BigUint::from_bytes_be(&hash);
+
+    let u256_max = BigUint::from(2u8).pow(256u32) - BigUint::from(1u8);
+    let target_difficulty = u256_max >> config.pow_difficulty;
+    
+    if hash_uint > target_difficulty {
+        return Err(DispenseError {
+            status: StatusCode::NOT_FOUND,
+            error: "Invalid proof of work".to_string(),
+        });
     }
 
     check_and_mark_dispense_limit(&dispense_tracker, address, config.dispense_limit_interval)?;
@@ -406,7 +419,7 @@ impl IntoResponse for CreateSessionError {
 
 pub async fn create_session(
     Json(input): Json<CreateSessionInput>,
-    Extension(sessions): Extension<Arc<Mutex<SessionMap>>>,
+    Extension(sessions): Extension<SharedSessions>,
     Extension(pow_difficulty): Extension<Arc<u8>>,
     Extension(config): Extension<SharedConfig>,
 ) -> Result<CreateSessionResponse, CreateSessionError> {
@@ -435,15 +448,8 @@ pub async fn create_session(
             })?;
     }
 
-    let mut map = match sessions.lock() {
-        Ok(val) => val,
-        Err(_) => {
-            return Err(CreateSessionError {
-                status: StatusCode::INTERNAL_SERVER_ERROR,
-                error: "Could not acquire sessions lock".to_owned(),
-            })
-        }
-    };
+    let mut map = sessions.lock().await;
+
     let salt = Salt::random();
 
     map.insert(salt.clone(), address);
@@ -462,7 +468,7 @@ pub struct SessionQuery {
 
 pub async fn get_session(
     query: Query<SessionQuery>,
-    Extension(sessions): Extension<Arc<Mutex<SessionMap>>>,
+    Extension(sessions): Extension<SharedSessions>,
 ) -> Response {
     let salt: Result<[u8; 32], _> = hex::decode(&query.salt).and_then(|value| {
         value
@@ -481,16 +487,7 @@ pub async fn get_session(
         }
     };
 
-    let map = match sessions.lock() {
-        Ok(val) => val,
-        Err(_) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Could not acquire sessions lock"})),
-            )
-                .into_response()
-        }
-    };
+    let map = sessions.lock().await;
 
     let result = map.get(&Salt::new(salt.unwrap()));
 

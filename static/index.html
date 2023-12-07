@@ -253,8 +253,6 @@
         let working = false;
 
         worker.onmessage = function (event) {
-          console.log(event.data);
-
           switch (event.data.type) {
             case "finish":
               working = false;
@@ -302,8 +300,6 @@
             return worker.postMessage(null);
           }
 
-          console.log("commencing pow");
-
           const data = {
             address: form["address"].value,
             captcha: "",
@@ -326,8 +322,8 @@
           showWaiting();
         }
 
-        function call_dispense() {
-          console.log("call_dispense()");
+        function call_dispense(data) {
+          console.log("salt", data.value.salt, "nonce", data.value.nonce, "hash", data.value.hash);
           // let xhr = new XMLHttpRequest();
           // xhr.open("POST", "/dispense");
           // xhr.setRequestHeader("Accept", "application/json");
