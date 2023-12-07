@@ -295,9 +295,7 @@
 
         function start_or_stop_pow(form) {
           if (working) {
-            console.log("stopping pow");
-            hideWaiting();
-            return worker.postMessage(null);
+            return stop_pow();
           }
 
           const data = {
@@ -322,16 +320,22 @@
           showWaiting();
         }
 
+        function stop_pow() {
+          console.log("stopping pow");
+          hideWaiting();
+          worker.postMessage(null);
+        }
+
         function call_dispense(data) {
-          console.log("salt", data.value.salt, "nonce", data.value.nonce, "hash", data.value.hash);
-          // let xhr = new XMLHttpRequest();
-          // xhr.open("POST", "/dispense");
-          // xhr.setRequestHeader("Accept", "application/json");
-          // xhr.setRequestHeader("Content-Type", "application/json");
-          // xhr.onload = () => handle_dispense_response()(JSON.parse(xhr.responseText));
-          // xhr.onetimeout = () => handle_error("Connection to the server timed out");
-          // xhr.onerror = () => handle_error("Connection to the server failed");
-          // xhr.send(JSON.stringify(data));
+          console.log("call_dispense()");
+          let xhr = new XMLHttpRequest();
+          xhr.open("POST", "/dispense");
+          xhr.setRequestHeader("Accept", "application/json");
+          xhr.setRequestHeader("Content-Type", "application/json");
+          xhr.onload = () => handle_dispense_response()(JSON.parse(xhr.responseText));
+          xhr.onetimeout = () => handle_error("Connection to the server timed out");
+          xhr.onerror = () => handle_error("Connection to the server failed");
+          xhr.send(JSON.stringify(data.value));
         }
 
         function handle_session_response(address) {
@@ -362,7 +366,7 @@
           return function (data) {
             if (data.error) {
               document.getElementById("response-failure").innerText = data.error;
-              hideWaiting();
+              stop_pow();
               return;
             }
 

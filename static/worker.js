@@ -6,6 +6,7 @@ const u256_max = BigInt(
 onmessage = async function (ev) {
   // If already working, stop
   if (working) {
+    console.log("worker: stopping");
     working = false;
     return;
   }
