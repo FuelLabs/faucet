@@ -22,11 +22,12 @@ use fuels_core::types::{
 use fuels_core::types::{input::Input, transaction_builders::ScriptTransactionBuilder};
 use handlebars::Handlebars;
 use hex::FromHexError;
+use num_bigint::BigUint;
 use reqwest::StatusCode;
 use secrecy::ExposeSecret;
 use serde::Deserialize;
-use serde_json::{json, from_str};
-use sha2::{ Sha256, Digest };
+use serde_json::{from_str, json};
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::{
     collections::BTreeMap,
@@ -34,7 +35,6 @@ use std::{
     str::FromStr,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use num_bigint::BigUint;
 use tower_http::services::ServeFile;
 use tracing::{error, info};
 
@@ -242,7 +242,7 @@ pub async fn dispense_tokens(
     //         status: StatusCode::BAD_REQUEST,
     //         error: "Invalid salt".to_string(),
     //     })?;
-        
+
     // let address = match sessions.lock().await.get(&Salt::new(salt)) {
     //     Some(value) => value.clone(),
     //     None => {
@@ -261,7 +261,7 @@ pub async fn dispense_tokens(
 
     // let u256_max = BigUint::from(2u8).pow(256u32) - BigUint::from(1u8);
     // let target_difficulty = u256_max >> config.pow_difficulty;
-    
+
     // if hash_uint > target_difficulty {
     //     return Err(DispenseError {
     //         status: StatusCode::NOT_FOUND,
@@ -269,7 +269,9 @@ pub async fn dispense_tokens(
     //     });
     // }
 
-    let address = Address::from_str("0x117af984ad70551d015aac40d80c768fcf4c6572e5029061bf1c9ff077f7563d").unwrap();
+    let address =
+        Address::from_str("0x117af984ad70551d015aac40d80c768fcf4c6572e5029061bf1c9ff077f7563d")
+            .unwrap();
 
     check_and_mark_dispense_limit(&dispense_tracker, address, config.dispense_limit_interval)?;
     let cleanup = || {
