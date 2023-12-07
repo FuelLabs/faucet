@@ -22,13 +22,13 @@ hex = "0.4.3"
 lazy_static = "1.4"
 memoize = "0.3.1"
 num-bigint = "0.4"
+rand = "0.8.5"
 reqwest = { version = "0.11", features = ["json", "rustls-tls-webpki-roots"], default-features = false }
 secrecy = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 sha2 = "0.10"
 sha256 = "1.1.4"
-rand = "0.8.5"
 tokio = { version = "1.0", features = ["full"] }
 tower = { version = "0.4", features = ["buffer", "limit", "load-shed", "util", "timeout"] }
 tower-http = { version = "0.2.5", features = ["cors", "trace", "set-header", "fs"] }
