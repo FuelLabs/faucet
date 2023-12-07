@@ -25,7 +25,7 @@ use hex::FromHexError;
 use reqwest::StatusCode;
 use secrecy::ExposeSecret;
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{json, from_str};
 use sha2::{ Sha256, Digest };
 use std::sync::Arc;
 use std::{
@@ -232,42 +232,44 @@ pub async fn dispense_tokens(
     Extension(sessions): Extension<SharedSessions>,
     Extension(dispense_tracker): Extension<SharedDispenseTracker>,
 ) -> Result<DispenseResponse, DispenseError> {
-    let salt: [u8; 32] = hex::decode(&input.salt)
-        .and_then(|value| {
-            value
-                .try_into()
-                .map_err(|_| FromHexError::InvalidStringLength)
-        })
-        .map_err(|_| DispenseError {
-            status: StatusCode::BAD_REQUEST,
-            error: "Invalid salt".to_string(),
-        })?;
+    // let salt: [u8; 32] = hex::decode(&input.salt)
+    //     .and_then(|value| {
+    //         value
+    //             .try_into()
+    //             .map_err(|_| FromHexError::InvalidStringLength)
+    //     })
+    //     .map_err(|_| DispenseError {
+    //         status: StatusCode::BAD_REQUEST,
+    //         error: "Invalid salt".to_string(),
+    //     })?;
         
-    let address = match sessions.lock().await.get(&Salt::new(salt)) {
-        Some(value) => value.clone(),
-        None => {
-            return Err(DispenseError {
-                status: StatusCode::NOT_FOUND,
-                error: "Salt does not exist".to_string(),
-            })
-        }
-    };
+    // let address = match sessions.lock().await.get(&Salt::new(salt)) {
+    //     Some(value) => value.clone(),
+    //     None => {
+    //         return Err(DispenseError {
+    //             status: StatusCode::NOT_FOUND,
+    //             error: "Salt does not exist".to_string(),
+    //         })
+    //     }
+    // };
 
-    let mut hasher = Sha256::new();
-    hasher.update(input.salt.as_bytes());
-    hasher.update(input.nonce.as_bytes());
-    let hash: [u8; 32] = hasher.finalize().into();
-    let hash_uint = BigUint::from_bytes_be(&hash);
+    // let mut hasher = Sha256::new();
+    // hasher.update(input.salt.as_bytes());
+    // hasher.update(input.nonce.as_bytes());
+    // let hash: [u8; 32] = hasher.finalize().into();
+    // let hash_uint = BigUint::from_bytes_be(&hash);
 
-    let u256_max = BigUint::from(2u8).pow(256u32) - BigUint::from(1u8);
-    let target_difficulty = u256_max >> config.pow_difficulty;
+    // let u256_max = BigUint::from(2u8).pow(256u32) - BigUint::from(1u8);
+    // let target_difficulty = u256_max >> config.pow_difficulty;
     
-    if hash_uint > target_difficulty {
-        return Err(DispenseError {
-            status: StatusCode::NOT_FOUND,
-            error: "Invalid proof of work".to_string(),
-        });
-    }
+    // if hash_uint > target_difficulty {
+    //     return Err(DispenseError {
+    //         status: StatusCode::NOT_FOUND,
+    //         error: "Invalid proof of work".to_string(),
+    //     });
+    // }
+
+    let address = Address::from_str("0x117af984ad70551d015aac40d80c768fcf4c6572e5029061bf1c9ff077f7563d").unwrap();
 
     check_and_mark_dispense_limit(&dispense_tracker, address, config.dispense_limit_interval)?;
     let cleanup = || {
