@@ -20,9 +20,11 @@ use fuels_core::types::node_info::NodeInfo;
 use fuels_core::types::transaction_builders::NetworkInfo;
 use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
+use session::Salt;
 use std::{
+    collections::HashMap,
     net::{SocketAddr, TcpListener},
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::Duration,
 };
 use tokio::task::JoinHandle;
@@ -90,6 +92,7 @@ pub type SharedFaucetState = Arc<tokio::sync::Mutex<FaucetState>>;
 pub type SharedWallet = Arc<WalletUnlocked>;
 pub type SharedConfig = Arc<Config>;
 pub type SharedNetworkConfig = Arc<NetworkConfig>;
+pub type SharedSessions = Arc<tokio::sync::Mutex<HashMap<Salt, Address>>>;
 
 pub async fn start_server(
     service_config: Config,
@@ -144,7 +147,7 @@ pub async fn start_server(
     info!("Faucet Balance: {}", balance);
 
     let pow_difficulty = service_config.pow_difficulty;
-    let sessions = Arc::new(Mutex::new(SessionMap::new()));
+    let sessions: SharedSessions = Arc::new(tokio::sync::Mutex::new(SessionMap::new()));
 
     // setup routes
     let app = Router::new()

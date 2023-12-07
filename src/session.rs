@@ -2,7 +2,7 @@ use fuel_types::Address;
 use rand::Rng;
 use std::collections::HashMap;
 
-#[derive(Eq, Hash, PartialEq, Clone)]
+#[derive(Eq, Hash, PartialEq, Clone, Debug)]
 pub struct Salt([u8; 32]);
 
 impl Salt {

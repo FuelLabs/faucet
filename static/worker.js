@@ -1,4 +1,7 @@
 let working = false;
+const u256_max = BigInt(
+  "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+);
 
 onmessage = async function (ev) {
   // If already working, stop
@@ -10,8 +13,10 @@ onmessage = async function (ev) {
   // Sanitize input
   if (!ev || !ev.data) return;
 
-  const { difficultyLevel, salt } = ev.data;
-  const difficultyMatch = new Array(difficultyLevel).fill("0").join("");
+  const difficultyLevel = BigInt(ev.data.difficultyLevel);
+  const target = u256_max >> difficultyLevel;
+  const { salt } = ev.data;
+
   working = true;
 
   let i = 0;
@@ -23,16 +28,19 @@ onmessage = async function (ev) {
       "SHA-256",
       new TextEncoder().encode(`${salt}${i}`)
     );
-    let hexString = Array.from(new Uint8Array(buffer))
+    let hash = Array.from(new Uint8Array(buffer))
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
 
-    if (hexString.substring(0, difficultyLevel) === difficultyMatch) {
+    var bn = BigInt("0x" + hash);
+
+    if (bn <= target) {
       this.postMessage({
         type: "hash",
-        value: { salt, nonce: i, hash: hexString },
+        value: { salt, nonce: `${i}`, hash },
       });
     }
+
     i++;
   }
 
