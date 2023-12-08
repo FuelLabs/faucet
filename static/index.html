@@ -237,10 +237,6 @@
         <div id="response-failure"></div>
         <input type="submit" value="Give me Ether" id="submit_btn" class="button" />
       </form>
-      <div id="response">
-        <h2 class="response-title">Test Ether sent to the wallet</h2>
-        <a href="#" id="explorer-link" class="button">See on Fuel Explorer</a>
-      </div>
     </div>
     <div class="provider-url">Node url: {{ public_node_url }}</div>
     <script>
@@ -345,14 +341,6 @@
               hideWaiting();
               return;
             }
-
-            // document.getElementById("form").hidden = true;
-            // document.getElementById("response").style.display = "block";
-            // document.getElementById(
-            //   "explorer-link"
-            // ).href = `${blockExplorer}/address/${address}?providerUrl=${encodeURIComponent(
-            //   providerUrl
-            // )}`;
 
             working = true;
             worker.postMessage({
