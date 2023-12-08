@@ -260,7 +260,6 @@ async fn many_concurrent_requests() {
     let context = TestContext::new(rng).await;
     let addr = context.addr;
 
-
     let mut queries = vec![];
     for recipient in recipient_addresses_str {
         let recipient = recipient.clone();
