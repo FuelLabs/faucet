@@ -162,7 +162,7 @@ pub async fn dispense_tokens(
         })?;
 
     let address = match sessions.lock().await.get(&Salt::new(salt)) {
-        Some(value) => value.clone(),
+        Some(value) => *value,
         None => {
             return Err(DispenseError {
                 status: StatusCode::NOT_FOUND,
