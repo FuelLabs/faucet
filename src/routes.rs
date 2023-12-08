@@ -26,7 +26,7 @@ use num_bigint::BigUint;
 use reqwest::StatusCode;
 use secrecy::ExposeSecret;
 use serde::Deserialize;
-use serde_json::{from_str, json};
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::{
@@ -232,46 +232,42 @@ pub async fn dispense_tokens(
     Extension(sessions): Extension<SharedSessions>,
     Extension(dispense_tracker): Extension<SharedDispenseTracker>,
 ) -> Result<DispenseResponse, DispenseError> {
-    // let salt: [u8; 32] = hex::decode(&input.salt)
-    //     .and_then(|value| {
-    //         value
-    //             .try_into()
-    //             .map_err(|_| FromHexError::InvalidStringLength)
-    //     })
-    //     .map_err(|_| DispenseError {
-    //         status: StatusCode::BAD_REQUEST,
-    //         error: "Invalid salt".to_string(),
-    //     })?;
+    let salt: [u8; 32] = hex::decode(&input.salt)
+        .and_then(|value| {
+            value
+                .try_into()
+                .map_err(|_| FromHexError::InvalidStringLength)
+        })
+        .map_err(|_| DispenseError {
+            status: StatusCode::BAD_REQUEST,
+            error: "Invalid salt".to_string(),
+        })?;
 
-    // let address = match sessions.lock().await.get(&Salt::new(salt)) {
-    //     Some(value) => value.clone(),
-    //     None => {
-    //         return Err(DispenseError {
-    //             status: StatusCode::NOT_FOUND,
-    //             error: "Salt does not exist".to_string(),
-    //         })
-    //     }
-    // };
+    let address = match sessions.lock().await.get(&Salt::new(salt)) {
+        Some(value) => value.clone(),
+        None => {
+            return Err(DispenseError {
+                status: StatusCode::NOT_FOUND,
+                error: "Salt does not exist".to_string(),
+            })
+        }
+    };
 
-    // let mut hasher = Sha256::new();
-    // hasher.update(input.salt.as_bytes());
-    // hasher.update(input.nonce.as_bytes());
-    // let hash: [u8; 32] = hasher.finalize().into();
-    // let hash_uint = BigUint::from_bytes_be(&hash);
+    let mut hasher = Sha256::new();
+    hasher.update(input.salt.as_bytes());
+    hasher.update(input.nonce.as_bytes());
+    let hash: [u8; 32] = hasher.finalize().into();
+    let hash_uint = BigUint::from_bytes_be(&hash);
 
-    // let u256_max = BigUint::from(2u8).pow(256u32) - BigUint::from(1u8);
-    // let target_difficulty = u256_max >> config.pow_difficulty;
+    let u256_max = BigUint::from(2u8).pow(256u32) - BigUint::from(1u8);
+    let target_difficulty = u256_max >> config.pow_difficulty;
 
-    // if hash_uint > target_difficulty {
-    //     return Err(DispenseError {
-    //         status: StatusCode::NOT_FOUND,
-    //         error: "Invalid proof of work".to_string(),
-    //     });
-    // }
-
-    let address =
-        Address::from_str("0x117af984ad70551d015aac40d80c768fcf4c6572e5029061bf1c9ff077f7563d")
-            .unwrap();
+    if hash_uint > target_difficulty {
+        return Err(DispenseError {
+            status: StatusCode::NOT_FOUND,
+            error: "Invalid proof of work".to_string(),
+        });
+    }
 
     check_and_mark_dispense_limit(&dispense_tracker, address, config.dispense_limit_interval)?;
     let cleanup = || {
@@ -435,7 +431,7 @@ pub async fn create_session(
     } else {
         return Err(CreateSessionError {
             status: StatusCode::BAD_REQUEST,
-            error: "invalid address".to_owned(),
+            error: "invalid address".to_string(),
         });
     }?;
 
@@ -446,7 +442,7 @@ pub async fn create_session(
             .map_err(|e| {
                 tracing::error!("{}", e);
                 CreateSessionError {
-                    error: "captcha failed".to_owned(),
+                    error: "captcha failed".to_string(),
                     status: StatusCode::UNAUTHORIZED,
                 }
             })?;
@@ -459,7 +455,7 @@ pub async fn create_session(
     map.insert(salt.clone(), address);
 
     Ok(CreateSessionResponse {
-        status: "Success".to_owned(),
+        status: "Success".to_string(),
         salt: hex::encode(salt.as_bytes()),
         difficulty: *pow_difficulty,
     })

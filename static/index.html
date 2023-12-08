@@ -215,13 +215,13 @@
             autocomplete="off"
             minlength="63"
             placeholder="fuel100000... or 0x0000..."
-            value="fuel1z9a0np9dwp236q2643qdsrrk3l85cetju5pfqcdlrj0lqalh2c7s3uqxsq"
             pattern="[a-z0-9]{63,66}"
           />
         </div>
         <p class="description">
           This is a <b class="bold">Test Ether</b> faucet running on the <b class="bold">Test Fuel network</b>. This
-          faucet sends fake Ether assets to the provided wallet address.
+          faucet sends fake Ether assets to the provided wallet address after, and is limited by a proof of work
+          mechanism
         </p>
         <div class="captcha-area">
           {{#if captcha_key}}
@@ -231,7 +231,7 @@
           {{/if}}
           <div class="queued hidden">
             <div class="loader"></div>
-            <div>PoW enabled: getting tokens</div>
+            <div id="dispensed">PoW enabled: getting funds</div>
           </div>
         </div>
         <div id="response-failure"></div>
@@ -251,6 +251,7 @@
         let address = query.get("address");
         let worker = new Worker("./worker.js");
         let working = false;
+        let dispensedTokens = 0;
 
         worker.onmessage = function (event) {
           switch (event.data.type) {
@@ -327,7 +328,6 @@
         }
 
         function call_dispense(data) {
-          console.log("call_dispense()");
           let xhr = new XMLHttpRequest();
           xhr.open("POST", "/dispense");
           xhr.setRequestHeader("Accept", "application/json");
@@ -370,7 +370,13 @@
               return;
             }
 
-            console.log(data);
+            if (working && data.status === "Success" && typeof data.tokens === "number") {
+              dispensedTokens += data.tokens;
+
+              document.getElementById(
+                "dispensed"
+              ).textContent = `PoW enabled: getting funds (got ${dispensedTokens} so far)`;
+            }
           };
         }
 

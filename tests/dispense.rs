@@ -4,8 +4,11 @@ use fuel_core::service::{Config as NodeConfig, FuelService};
 
 use fuel_core_client::client::pagination::{PageDirection, PaginationRequest};
 use fuel_faucet::config::Config;
-use fuel_faucet::models::DispenseInfoResponse;
+
 use fuel_faucet::{start_server, Clock, THE_BIGGEST_AMOUNT};
+use fuel_faucet::models::{DispenseInfoResponse, CreateSessionResponse};
+use fuel_faucet::session::Salt;
+
 use fuel_tx::{ConsensusParameters, FeeParameters};
 use fuel_types::{Address, AssetId};
 use fuels_accounts::fuel_crypto::SecretKey;
@@ -130,6 +133,7 @@ impl TestContext {
             dispense_amount,
             dispense_asset_id: AssetId::default(),
             min_gas_price: 1,
+            pow_difficulty: 0,
             ..Default::default()
         };
 
@@ -204,11 +208,24 @@ async fn _dispense_sends_coins_to_valid_address(
     let addr = context.addr;
     let client = reqwest::Client::new();
 
+    let create_session_response: CreateSessionResponse = client
+        .post(format!("http://{addr}/session"))
+        .json(&json!({
+            "address": recipient_address_str,
+            "captcha": ""
+        }))
+        .send()
+        .await
+        .expect("Failed to send create_session request")
+        .json()
+        .await
+        .expect("Failed to deserialize create_session response");
+
     client
         .post(format!("http://{addr}/dispense"))
         .json(&json!({
-            "captcha": "",
-            "address": recipient_address_str,
+            "salt": create_session_response.salt,
+            "nonce": "0",
         }))
         .send()
         .await
@@ -243,16 +260,31 @@ async fn many_concurrent_requests() {
     let context = TestContext::new(rng).await;
     let addr = context.addr;
 
+
     let mut queries = vec![];
     for recipient in recipient_addresses_str {
         let recipient = recipient.clone();
         queries.push(async move {
             let client = reqwest::Client::new();
+
+            let create_session_response: CreateSessionResponse = client
+                .post(format!("http://{addr}/session"))
+                .json(&json!({
+                    "address": recipient,
+                    "captcha": ""
+                }))
+                .send()
+                .await
+                .expect("Failed to send create_session request")
+                .json()
+                .await
+                .expect("Failed to deserialize create_session response");
+
             client
                 .post(format!("http://{addr}/dispense"))
                 .json(&json!({
-                    "captcha": "",
-                    "address": recipient,
+                    "salt": create_session_response.salt,
+                    "nonce": hex::encode(Salt::random().as_bytes()),
                 }))
                 .send()
                 .await

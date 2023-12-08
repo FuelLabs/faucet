@@ -57,7 +57,7 @@ impl Default for Config {
                 .parse::<u64>()
                 .expect("expected a valid integer for TIMEOUT_SECONDS"),
             pow_difficulty: env::var(POW_DIFFICULTY)
-                .unwrap_or_else(|_| "6".to_owned())
+                .unwrap_or_else(|_| "20".to_string())
                 .parse::<u8>()
                 .expect("expected a valid integer [0, 255] for POW_DIFFICULTY"),
         }

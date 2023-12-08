@@ -31,7 +31,7 @@ pub struct CreateSessionInput {
     pub captcha: String,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct CreateSessionResponse {
     pub status: String,
     pub salt: String,
