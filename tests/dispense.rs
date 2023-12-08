@@ -4,7 +4,7 @@ use fuel_core::service::{Config as NodeConfig, FuelService};
 
 use fuel_core_client::client::pagination::{PageDirection, PaginationRequest};
 use fuel_faucet::config::Config;
-use fuel_faucet::models::{DispenseInfoResponse, CreateSessionResponse};
+use fuel_faucet::models::{CreateSessionResponse, DispenseInfoResponse};
 use fuel_faucet::session::Salt;
 use fuel_faucet::{start_server, THE_BIGGEST_AMOUNT};
 use fuel_tx::{ConsensusParameters, FeeParameters};
@@ -219,7 +219,6 @@ async fn many_concurrent_requests() {
     let recipient_address_str = format!("{}", &recipient_address);
     let context = TestContext::new(rng).await;
     let addr = context.addr;
-
 
     let mut queries = vec![];
     const COUNT: usize = 30;
