@@ -31,3 +31,9 @@ To run locally, assuming environment variables have already been set:
 ```sh
 cargo run
 ```
+
+You will need a fuel node running. You can run one with the default configuration to make the faucet work:
+
+```sh
+fuel-core run --chain ./chain_config.json --db-type in-memory
+```
