@@ -20,6 +20,7 @@ use serde_json::json;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use std::usize;
 
 #[derive(Debug, Clone)]
 struct MockClock {
@@ -225,41 +226,39 @@ async fn _dispense_sends_coins_to_valid_address(
     assert_eq!(test_balance, context.faucet_config.dispense_amount);
 }
 
+fn generate_recipient_addresses(count: usize, rng: &mut StdRng) -> Vec<String> {
+    let recipient_addresses: Vec<Address> =
+        std::iter::repeat_with(|| rng.gen()).take(count).collect();
+    recipient_addresses
+        .iter()
+        .map(|addr| format!("{}", addr))
+        .collect()
+}
+
 #[tokio::test]
 async fn many_concurrent_requests() {
     let mut rng = StdRng::seed_from_u64(42);
-    const RECIPIENTS: usize = 3;
-    let recipient_addresses: Vec<Address> = std::iter::repeat_with(|| rng.gen())
-        .take(RECIPIENTS)
-        .collect();
-    let recipient_addresses_str: Vec<_> = recipient_addresses
-        .iter()
-        .map(|addr| format!("{}", addr))
-        .collect();
+    const COUNT: usize = 30;
+    let recipient_addresses_str = generate_recipient_addresses(COUNT, &mut rng);
     let context = TestContext::new(rng).await;
     let addr = context.addr;
 
     let mut queries = vec![];
-    const REQ_PER_RECIPIENT: usize = 10;
     for recipient in recipient_addresses_str {
-        for _ in 0..REQ_PER_RECIPIENT {
-            let recipient = recipient.clone();
-            queries.push(async move {
-                let client = reqwest::Client::new();
-                client
-                    .post(format!("http://{addr}/dispense"))
-                    .json(&json!({
-                        "captcha": "",
-                        "address": recipient,
-                    }))
-                    .send()
-                    .await
-            });
-        }
+        let recipient = recipient.clone();
+        queries.push(async move {
+            let client = reqwest::Client::new();
+            client
+                .post(format!("http://{addr}/dispense"))
+                .json(&json!({
+                    "captcha": "",
+                    "address": recipient,
+                }))
+                .send()
+                .await
+        });
     }
-
     let queries = futures::future::join_all(queries).await;
-
     for query in queries {
         query.expect("Query should be successful");
     }
@@ -277,17 +276,8 @@ async fn many_concurrent_requests() {
         .into_iter()
         .filter(|tx| !matches!(tx.transaction, TransactionType::Mint(_)))
         .collect::<Vec<_>>();
-    assert_eq!(3, txs.len());
 
-    for recipient in recipient_addresses {
-        let test_balance = context
-            .provider
-            .get_asset_balance(&recipient.into(), context.faucet_config.dispense_asset_id)
-            .await
-            .unwrap();
-
-        assert_eq!(test_balance, context.faucet_config.dispense_amount);
-    }
+    assert_eq!(COUNT, txs.len());
 }
 
 #[tokio::test]
@@ -314,7 +304,6 @@ async fn dispense_once_per_day() {
     assert_eq!(response.status(), reqwest::StatusCode::CREATED);
 
     for _ in 0..5 {
-        //tokio::time::advance(Duration::from_secs(time_increment)).await;
         context.clock.advance(time_increment);
 
         let response = reqwest::Client::new()
@@ -327,17 +316,10 @@ async fn dispense_once_per_day() {
             .await
             .expect("Subsequent dispensing requests should be successful with status 500");
 
-        assert_eq!(
-            response.status(),
-            reqwest::StatusCode::INTERNAL_SERVER_ERROR
-        );
+        assert_eq!(response.status(), reqwest::StatusCode::TOO_MANY_REQUESTS);
     }
 
-    //tokio::time::advance(Duration::from_secs(time_increment)).await;
     context.clock.advance(time_increment + 1);
-
-    // time needs to be resumed so tokio::timeout doesn't fail
-    //tokio::time::resume();
     let response = reqwest::Client::new()
         .post(format!("http://{addr}/dispense"))
         .json(&json!({

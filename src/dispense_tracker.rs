@@ -6,7 +6,7 @@ use std::{
 use fuel_types::Address;
 
 #[derive(Debug, Eq, PartialEq)]
-pub(crate) struct Entry {
+pub struct Entry {
     address: Address,
     timestamp: u64,
 }
@@ -47,9 +47,9 @@ pub struct DispenseTracker {
 impl Default for DispenseTracker {
     fn default() -> Self {
         Self {
-            tracked: Default::default(),
-            queue: Default::default(),
-            in_progress: Default::default(),
+            tracked: HashMap::default(),
+            queue: BinaryHeap::default(),
+            in_progress: HashSet::default(),
             clock: Box::new(TokioTime {}),
         }
     }
@@ -77,7 +77,11 @@ impl DispenseTracker {
         self.in_progress.insert(address);
     }
 
-    pub fn untrack_elapsed(&mut self, eviction_duration: u64) {
+    pub fn remove_in_progress(&mut self, address: &Address) {
+        self.in_progress.remove(address);
+    }
+
+    pub fn evict_expired_entries(&mut self, eviction_duration: u64) {
         let now = self.clock.now();
 
         while let Some(oldest_entry) = self.queue.peek() {

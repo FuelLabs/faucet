@@ -126,7 +126,7 @@ async fn has_reached_dispense_limit(
     interval: u64,
 ) -> bool {
     let mut dispense_tracker = dispense_tracker.lock().unwrap();
-    dispense_tracker.untrack_elapsed(interval);
+    dispense_tracker.evict_expired_entries(interval);
 
     if !dispense_tracker.is_tracked(&address) {
         dispense_tracker.mark_in_progress(address);
@@ -152,16 +152,17 @@ pub async fn dispense_tokens(
     } else if let Ok(address) = Bech32Address::from_str(input.address.as_str()) {
         Ok(address.into())
     } else {
-        return Err(DispenseError {
-            status: StatusCode::BAD_REQUEST,
-            error: "invalid address".to_string(),
-        });
+        return Err(error(
+            "invalid address".to_string(),
+            StatusCode::BAD_REQUEST,
+        ));
     }?;
 
     if has_reached_dispense_limit(&dispense_tracker, address, config.dispense_limit_interval).await
     {
         return Err(error(
             "Account has already received assets today".to_string(),
+            StatusCode::TOO_MANY_REQUESTS,
         ));
     };
 
@@ -190,7 +191,12 @@ pub async fn dispense_tokens(
             wallet
                 .get_spendable_resources(AssetId::BASE, THE_BIGGEST_AMOUNT)
                 .await
-                .map_err(|e| error(format!("Failed to get resources: {}", e)))?
+                .map_err(|e| {
+                    error(
+                        format!("Failed to get resources: {e}"),
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                    )
+                })?
                 .into_iter()
                 .filter_map(|coin| match coin {
                     CoinType::Coin(coin) => Some(CoinOutput {
@@ -245,8 +251,20 @@ pub async fn dispense_tokens(
             provider.send_transaction(script),
         )
         .await
-        .map(|r| r.map_err(|e| error(format!("Failed to submit transaction: {}", e))))
-        .map_err(|e| error(format!("Timeout while submitting transaction: {}", e)));
+        .map(|r| {
+            r.map_err(|e| {
+                error(
+                    format!("Failed to submit transaction: {e}"),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                )
+            })
+        })
+        .map_err(|e| {
+            error(
+                format!("Timeout while submitting transaction: {e}"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        });
 
         match result {
             Ok(Ok(_)) => {
@@ -260,6 +278,10 @@ pub async fn dispense_tokens(
                 break;
             }
             _ => {
+                dispense_tracker
+                    .lock()
+                    .unwrap()
+                    .remove_in_progress(&address);
                 guard.last_output = None;
             }
         };
@@ -270,12 +292,19 @@ pub async fn dispense_tokens(
         client.await_transaction_commit(&tx_id),
     )
     .await
-    .map(|r| r.map_err(|e| error(format!("Failed to submit transaction with error: {}", e))))
+    .map(|r| {
+        r.map_err(|e| {
+            error(
+                format!("Failed to submit transaction with error: {e}"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })
+    })
     .map_err(|e| {
-        error(format!(
-            "Got a timeout during transaction submission: {}",
-            e
-        ))
+        error(
+            format!("Got a timeout during transaction submission: {e}"),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )
     })??;
 
     info!(
@@ -299,10 +328,7 @@ pub async fn dispense_info(
     })
 }
 
-fn error(error: String) -> DispenseError {
+fn error(error: String, status: StatusCode) -> DispenseError {
     error!("{}", error);
-    DispenseError {
-        error,
-        status: StatusCode::INTERNAL_SERVER_ERROR,
-    }
+    DispenseError { error, status }
 }
