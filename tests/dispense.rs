@@ -314,7 +314,7 @@ async fn dispense_once_per_day() {
             }))
             .send()
             .await
-            .expect("Subsequent dispensing requests should be successful with status 500");
+            .expect("Subsequent dispensing requests should be successfully sent");
 
         assert_eq!(response.status(), reqwest::StatusCode::TOO_MANY_REQUESTS);
     }
