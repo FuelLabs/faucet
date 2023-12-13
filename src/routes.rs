@@ -120,7 +120,7 @@ impl IntoResponse for DispenseInfoResponse {
     }
 }
 
-async fn has_reached_dispense_limit(
+async fn check_and_mark_dispense_limit(
     dispense_tracker: &SharedDispenseTracker,
     address: Address,
     interval: u64,
@@ -158,7 +158,8 @@ pub async fn dispense_tokens(
         ));
     }?;
 
-    if has_reached_dispense_limit(&dispense_tracker, address, config.dispense_limit_interval).await
+    if check_and_mark_dispense_limit(&dispense_tracker, address, config.dispense_limit_interval)
+        .await
     {
         return Err(error(
             "Account has already received assets today".to_string(),
@@ -268,8 +269,6 @@ pub async fn dispense_tokens(
 
         match result {
             Ok(Ok(_)) => {
-                dispense_tracker.lock().unwrap().track(address);
-
                 guard.last_output = Some(CoinOutput {
                     utxo_id: UtxoId::new(tx_id, 1),
                     owner: coin_output.owner,
@@ -278,10 +277,6 @@ pub async fn dispense_tokens(
                 break;
             }
             _ => {
-                dispense_tracker
-                    .lock()
-                    .unwrap()
-                    .remove_in_progress(&address);
                 guard.last_output = None;
             }
         };
@@ -311,6 +306,8 @@ pub async fn dispense_tokens(
         "dispensed {} tokens to {:#x}",
         config.dispense_amount, &address
     );
+
+    dispense_tracker.lock().unwrap().track(address);
 
     Ok(DispenseResponse {
         status: "Success".to_string(),
