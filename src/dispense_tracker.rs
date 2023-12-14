@@ -77,6 +77,10 @@ impl DispenseTracker {
         self.in_progress.insert(address);
     }
 
+    pub fn remove_in_progress(&mut self, address: &Address) {
+        self.in_progress.remove(address);
+    }
+
     pub fn evict_expired_entries(&mut self, eviction_duration: u64) {
         let now = self.clock.now();
 

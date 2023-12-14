@@ -193,6 +193,10 @@ pub async fn dispense_tokens(
                 .get_spendable_resources(AssetId::BASE, THE_BIGGEST_AMOUNT)
                 .await
                 .map_err(|e| {
+                    dispense_tracker
+                        .lock()
+                        .unwrap()
+                        .remove_in_progress(&address);
                     error(
                         format!("Failed to get resources: {e}"),
                         StatusCode::INTERNAL_SERVER_ERROR,
