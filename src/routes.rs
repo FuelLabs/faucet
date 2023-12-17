@@ -1,6 +1,6 @@
 use crate::{
-    models::*, recaptcha, CoinOutput, SharedConfig, SharedFaucetState, SharedNetworkConfig,
-    SharedWallet,
+    models::*, recaptcha, CoinOutput, SharedConfig, SharedDispenseTracker, SharedFaucetState,
+    SharedNetworkConfig, SharedWallet,
 };
 use axum::{
     response::{Html, IntoResponse, Response},
@@ -9,8 +9,8 @@ use axum::{
 
 use fuel_core_client::client::FuelClient;
 use fuel_tx::UtxoId;
-use fuel_types::{Address, AssetId};
-use fuels_accounts::{Account, Signer, ViewOnlyAccount};
+use fuel_types::{Address, AssetId, Bytes32};
+use fuels_accounts::{wallet::WalletUnlocked, Account, Signer, ViewOnlyAccount};
 use fuels_core::types::transaction::{Transaction, TxPolicies};
 use fuels_core::types::transaction_builders::BuildableTransaction;
 use fuels_core::types::{
@@ -120,6 +120,85 @@ impl IntoResponse for DispenseInfoResponse {
     }
 }
 
+fn check_and_mark_dispense_limit(
+    dispense_tracker: &SharedDispenseTracker,
+    address: Address,
+    interval: u64,
+) -> Result<(), DispenseError> {
+    let mut tracker = dispense_tracker.lock().unwrap();
+    tracker.evict_expired_entries(interval);
+
+    if tracker.has_tracked(&address) {
+        return Err(error(
+            "Account has already received assets today".to_string(),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    tracker.mark_in_progress(address);
+    Ok(())
+}
+
+async fn get_coin_output(wallet: &WalletUnlocked) -> Result<CoinOutput, DispenseError> {
+    let resources = wallet
+        .get_spendable_resources(AssetId::BASE, THE_BIGGEST_AMOUNT)
+        .await
+        .map_err(|e| {
+            error(
+                format!("Failed to get resources: {e}"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?;
+
+    let coin_output = resources
+        .into_iter()
+        .filter_map(|coin| match coin {
+            CoinType::Coin(coin) => Some(CoinOutput {
+                utxo_id: coin.utxo_id,
+                owner: coin.owner.into(),
+                amount: coin.amount,
+            }),
+            _ => None,
+        })
+        .last()
+        .ok_or_else(|| {
+            error(
+                "The wallet is empty".to_string(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?;
+
+    Ok(coin_output)
+}
+
+async fn submit_tx_with_timeout(
+    client: &FuelClient,
+    tx_id: &Bytes32,
+    timeout: u64,
+) -> Result<(), DispenseError> {
+    tokio::time::timeout(
+        Duration::from_secs(timeout),
+        client.await_transaction_commit(tx_id),
+    )
+    .await
+    .map(|r| {
+        r.map_err(|e| {
+            error(
+                format!("Failed to submit transaction with error: {e}"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })
+    })
+    .map_err(|e| {
+        error(
+            format!("Got a timeout during transaction submission: {e}"),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )
+    })??;
+
+    Ok(())
+}
+
 #[tracing::instrument(skip(wallet, config))]
 pub async fn dispense_tokens(
     Json(input): Json<DispenseInput>,
@@ -128,6 +207,7 @@ pub async fn dispense_tokens(
     Extension(config): Extension<SharedConfig>,
     Extension(client): Extension<Arc<FuelClient>>,
     Extension(network_config): Extension<SharedNetworkConfig>,
+    Extension(dispense_tracker): Extension<SharedDispenseTracker>,
 ) -> Result<DispenseResponse, DispenseError> {
     // parse deposit address
     let address = if let Ok(address) = Address::from_str(input.address.as_str()) {
@@ -135,10 +215,10 @@ pub async fn dispense_tokens(
     } else if let Ok(address) = Bech32Address::from_str(input.address.as_str()) {
         Ok(address.into())
     } else {
-        return Err(DispenseError {
-            status: StatusCode::BAD_REQUEST,
-            error: "invalid address".to_string(),
-        });
+        return Err(error(
+            "invalid address".to_string(),
+            StatusCode::BAD_REQUEST,
+        ));
     }?;
 
     // verify captcha
@@ -154,8 +234,15 @@ pub async fn dispense_tokens(
             })?;
     }
 
-    let provider = wallet.provider().expect("client provider");
+    check_and_mark_dispense_limit(&dispense_tracker, address, config.dispense_limit_interval)?;
+    let cleanup = || {
+        dispense_tracker
+            .lock()
+            .unwrap()
+            .remove_in_progress(&address);
+    };
 
+    let provider = wallet.provider().expect("client provider");
     let mut tx_id;
 
     loop {
@@ -163,21 +250,10 @@ pub async fn dispense_tokens(
         let coin_output = if let Some(previous_coin_output) = &guard.last_output {
             *previous_coin_output
         } else {
-            wallet
-                .get_spendable_resources(AssetId::BASE, THE_BIGGEST_AMOUNT)
-                .await
-                .map_err(|e| error(format!("Failed to get resources: {}", e)))?
-                .into_iter()
-                .filter_map(|coin| match coin {
-                    CoinType::Coin(coin) => Some(CoinOutput {
-                        utxo_id: coin.utxo_id,
-                        owner: coin.owner.into(),
-                        amount: coin.amount,
-                    }),
-                    _ => None,
-                })
-                .last()
-                .expect("The wallet is empty")
+            get_coin_output(&wallet).await.map_err(|e| {
+                cleanup();
+                e
+            })?
         };
 
         let coin_type = CoinType::Coin(Coin {
@@ -221,12 +297,19 @@ pub async fn dispense_tokens(
             provider.send_transaction(script),
         )
         .await
-        .map(|r| r.map_err(|e| error(format!("Failed to submit transaction: {}", e))))
+        .map(|r| {
+            r.map_err(|e| {
+                error(
+                    format!("Failed to submit transaction: {e}"),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                )
+            })
+        })
         .map_err(|e| {
-            error(format!(
-                "Timeout during while submitting transaction: {}",
-                e
-            ))
+            error(
+                format!("Timeout while submitting transaction: {e}"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
         });
 
         match result {
@@ -244,23 +327,19 @@ pub async fn dispense_tokens(
         };
     }
 
-    tokio::time::timeout(
-        Duration::from_secs(config.timeout),
-        client.await_transaction_commit(&tx_id),
-    )
-    .await
-    .map(|r| r.map_err(|e| error(format!("Failed to submit transaction with error: {}", e))))
-    .map_err(|e| {
-        error(format!(
-            "Got a timeout during transaction submission: {}",
+    submit_tx_with_timeout(&client, &tx_id, config.timeout)
+        .await
+        .map_err(|e| {
+            cleanup();
             e
-        ))
-    })??;
+        })?;
 
     info!(
         "dispensed {} tokens to {:#x}",
         config.dispense_amount, &address
     );
+
+    dispense_tracker.lock().unwrap().track(address);
 
     Ok(DispenseResponse {
         status: "Success".to_string(),
@@ -278,10 +357,7 @@ pub async fn dispense_info(
     })
 }
 
-fn error(error: String) -> DispenseError {
+fn error(error: String, status: StatusCode) -> DispenseError {
     error!("{}", error);
-    DispenseError {
-        error,
-        status: StatusCode::INTERNAL_SERVER_ERROR,
-    }
+    DispenseError { error, status }
 }

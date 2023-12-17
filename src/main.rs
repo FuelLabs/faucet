@@ -1,11 +1,12 @@
-use fuel_faucet::{config::Config, start_server};
+use fuel_faucet::{config::Config, start_server, TokioTime};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() {
     let config = Config::default();
     init_logger(&config);
-    let (_, task) = start_server(config).await;
+    let clock = TokioTime {};
+    let (_, task) = start_server(config, clock).await;
     let _ = task.await.unwrap();
 }
 

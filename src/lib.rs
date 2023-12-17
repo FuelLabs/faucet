@@ -1,6 +1,7 @@
 use crate::{
     config::Config,
     constants::{MAX_CONCURRENT_REQUESTS, WALLET_SECRET_DEV_KEY},
+    dispense_tracker::DispenseTracker,
     routes::health,
 };
 use anyhow::anyhow;
@@ -21,7 +22,7 @@ use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
 use std::{
     net::{SocketAddr, TcpListener},
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::Duration,
 };
 use tokio::task::JoinHandle;
@@ -37,9 +38,11 @@ pub mod config;
 pub mod models;
 
 mod constants;
+mod dispense_tracker;
 mod recaptcha;
 mod routes;
 
+pub use dispense_tracker::{Clock, TokioTime};
 pub use routes::THE_BIGGEST_AMOUNT;
 
 #[derive(Debug)]
@@ -88,9 +91,11 @@ pub type SharedFaucetState = Arc<tokio::sync::Mutex<FaucetState>>;
 pub type SharedWallet = Arc<WalletUnlocked>;
 pub type SharedConfig = Arc<Config>;
 pub type SharedNetworkConfig = Arc<NetworkConfig>;
+pub type SharedDispenseTracker = Arc<Mutex<DispenseTracker>>;
 
 pub async fn start_server(
     service_config: Config,
+    clock: impl Clock + 'static,
 ) -> (SocketAddr, JoinHandle<Result<(), anyhow::Error>>) {
     info!("{:#?}", &service_config);
 
@@ -179,6 +184,7 @@ pub async fn start_server(
                 ))))
                 .layer(Extension(Arc::new(service_config.clone())))
                 .layer(Extension(Arc::new(network_config)))
+                .layer(Extension(Arc::new(Mutex::new(DispenseTracker::new(clock)))))
                 .layer(
                     CorsLayer::new()
                         .allow_origin(Any)

@@ -5,7 +5,7 @@ use fuel_core::service::{Config as NodeConfig, FuelService};
 use fuel_core_client::client::pagination::{PageDirection, PaginationRequest};
 use fuel_faucet::config::Config;
 use fuel_faucet::models::DispenseInfoResponse;
-use fuel_faucet::{start_server, THE_BIGGEST_AMOUNT};
+use fuel_faucet::{start_server, Clock, THE_BIGGEST_AMOUNT};
 use fuel_tx::{ConsensusParameters, FeeParameters};
 use fuel_types::{Address, AssetId};
 use fuels_accounts::fuel_crypto::SecretKey;
@@ -18,7 +18,32 @@ use rand::{Rng, SeedableRng};
 use secrecy::Secret;
 use serde_json::json;
 use std::net::SocketAddr;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use std::usize;
+
+#[derive(Debug, Clone)]
+struct MockClock {
+    timer: Arc<Mutex<u64>>,
+}
+
+impl Clock for MockClock {
+    fn now(&self) -> u64 {
+        *self.timer.lock().unwrap()
+    }
+}
+
+impl MockClock {
+    pub fn new() -> Self {
+        Self {
+            timer: Arc::new(Mutex::new(0)),
+        }
+    }
+
+    pub fn advance(&self, increment: u64) {
+        *self.timer.lock().as_deref_mut().unwrap() += increment
+    }
+}
 
 struct TestContext {
     #[allow(dead_code)]
@@ -26,6 +51,7 @@ struct TestContext {
     faucet_config: Config,
     provider: Provider,
     addr: SocketAddr,
+    clock: MockClock,
 }
 impl TestContext {
     async fn new(mut rng: StdRng) -> Self {
@@ -106,13 +132,16 @@ impl TestContext {
             min_gas_price: 1,
             ..Default::default()
         };
-        let (addr, _) = start_server(faucet_config.clone()).await;
+
+        let clock = MockClock::new();
+        let (addr, _) = start_server(faucet_config.clone(), clock.clone()).await;
 
         Self {
             fuel_node,
             faucet_config,
             provider,
             addr,
+            clock,
         }
     }
 }
@@ -197,48 +226,42 @@ async fn _dispense_sends_coins_to_valid_address(
     assert_eq!(test_balance, context.faucet_config.dispense_amount);
 }
 
+fn generate_recipient_addresses(count: usize, rng: &mut StdRng) -> Vec<String> {
+    let recipient_addresses: Vec<Address> =
+        std::iter::repeat_with(|| rng.gen()).take(count).collect();
+    recipient_addresses
+        .iter()
+        .map(|addr| format!("{}", addr))
+        .collect()
+}
+
 #[tokio::test]
 async fn many_concurrent_requests() {
     let mut rng = StdRng::seed_from_u64(42);
-    let recipient_address: Address = rng.gen();
-    let recipient_address_str = format!("{}", &recipient_address);
+    const COUNT: usize = 30;
+    let recipient_addresses_str = generate_recipient_addresses(COUNT, &mut rng);
     let context = TestContext::new(rng).await;
     let addr = context.addr;
 
     let mut queries = vec![];
-    const COUNT: usize = 30;
-    for _ in 0..COUNT {
-        let recipient_address_str = recipient_address_str.clone();
+    for recipient in recipient_addresses_str {
+        let recipient = recipient.clone();
         queries.push(async move {
             let client = reqwest::Client::new();
             client
                 .post(format!("http://{addr}/dispense"))
                 .json(&json!({
                     "captcha": "",
-                    "address": recipient_address_str,
+                    "address": recipient,
                 }))
                 .send()
                 .await
         });
     }
-
     let queries = futures::future::join_all(queries).await;
-
     for query in queries {
         query.expect("Query should be successful");
     }
-
-    let test_balance: u64 = context
-        .provider
-        .get_coins(
-            &recipient_address.into(),
-            context.faucet_config.dispense_asset_id,
-        )
-        .await
-        .unwrap()
-        .iter()
-        .map(|coin| coin.amount)
-        .sum();
 
     let txs = context
         .provider
@@ -255,8 +278,57 @@ async fn many_concurrent_requests() {
         .collect::<Vec<_>>();
 
     assert_eq!(COUNT, txs.len());
-    assert_eq!(
-        test_balance,
-        COUNT as u64 * context.faucet_config.dispense_amount
-    );
+}
+
+#[tokio::test]
+async fn dispense_once_per_day() {
+    let mut rng = StdRng::seed_from_u64(42);
+    let recipient_address: Address = rng.gen();
+    let recipient_address_str = format!("{}", &recipient_address);
+    let context = TestContext::new(rng).await;
+    let addr = context.addr;
+
+    let dispense_interval = 24 * 60 * 60;
+    let time_increment = dispense_interval / 6;
+
+    let response = reqwest::Client::new()
+        .post(format!("http://{addr}/dispense"))
+        .json(&json!({
+            "captcha": "",
+            "address": recipient_address_str.clone(),
+        }))
+        .send()
+        .await
+        .expect("First dispensing request should be successful");
+
+    assert_eq!(response.status(), reqwest::StatusCode::CREATED);
+
+    for _ in 0..5 {
+        context.clock.advance(time_increment);
+
+        let response = reqwest::Client::new()
+            .post(format!("http://{addr}/dispense"))
+            .json(&json!({
+                "captcha": "",
+                "address": recipient_address_str.clone(),
+            }))
+            .send()
+            .await
+            .expect("Subsequent dispensing requests should be successfully sent");
+
+        assert_eq!(response.status(), reqwest::StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    context.clock.advance(time_increment + 1);
+    let response = reqwest::Client::new()
+        .post(format!("http://{addr}/dispense"))
+        .json(&json!({
+            "captcha": "",
+            "address": recipient_address_str.clone(),
+        }))
+        .send()
+        .await
+        .expect("Dispensing requests after the interval should be successful");
+
+    assert_eq!(response.status(), reqwest::StatusCode::CREATED);
 }
