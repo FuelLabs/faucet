@@ -139,9 +139,12 @@ fn check_and_mark_dispense_limit(
     Ok(())
 }
 
-async fn get_coin_output(wallet: &WalletUnlocked) -> Result<CoinOutput, DispenseError> {
+async fn get_coin_output(
+    wallet: &WalletUnlocked,
+    amount: u64,
+) -> Result<CoinOutput, DispenseError> {
     let resources = wallet
-        .get_spendable_resources(AssetId::BASE, THE_BIGGEST_AMOUNT)
+        .get_spendable_resources(AssetId::BASE, amount)
         .await
         .map_err(|e| {
             error(
@@ -250,10 +253,12 @@ pub async fn dispense_tokens(
         let coin_output = if let Some(previous_coin_output) = &guard.last_output {
             *previous_coin_output
         } else {
-            get_coin_output(&wallet).await.map_err(|e| {
-                cleanup();
-                e
-            })?
+            get_coin_output(&wallet, config.dispense_amount)
+                .await
+                .map_err(|e| {
+                    cleanup();
+                    e
+                })?
         };
 
         let coin_type = CoinType::Coin(Coin {
