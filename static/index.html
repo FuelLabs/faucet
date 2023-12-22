@@ -235,6 +235,7 @@
       let blockExplorer = "https://fuellabs.github.io/block-explorer-v2";
       let query = params = new URLSearchParams(document.location.search);
       let address = query.get('address');
+      let redirectUrl = decodeURIComponent(query.get('redirectUrl') || '');
 
       if (address) {
         let $address = document.getElementById('address');
@@ -297,6 +298,9 @@
             ).href = `${blockExplorer}/address/${address}?providerUrl=${encodeURIComponent(
               providerUrl
             )}`;
+            if (redirectUrl) {
+              location.href = redirectUrl;
+            }
           } else {
             document.getElementById("response-failure").innerText = data.error;
             hideWaiting();
