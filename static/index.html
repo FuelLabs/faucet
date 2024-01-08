@@ -233,9 +233,9 @@
     const faucetApp = (function () {
       let providerUrl = "{{ public_node_url }}";
       let blockExplorer = "https://fuellabs.github.io/block-explorer-v2";
-      let query = params = new URLSearchParams(document.location.search);
+      let query = new URLSearchParams(document.location.search);
       let address = query.get('address');
-      let redirectUrl = decodeURIComponent(query.get('redirectUrl') || '');
+      let shouldRedirect = query.get('redirect') === 'true';
 
       if (address) {
         let $address = document.getElementById('address');
@@ -298,8 +298,8 @@
             ).href = `${blockExplorer}/address/${address}?providerUrl=${encodeURIComponent(
               providerUrl
             )}`;
-            if (redirectUrl) {
-              location.href = redirectUrl;
+            if (shouldRedirect && document.referrer) {
+              location.href = document.referrer;
             }
           } else {
             document.getElementById("response-failure").innerText = data.error;
