@@ -13,7 +13,7 @@ pub struct Entry {
 
 impl Ord for Entry {
     fn cmp(&self, other: &Self) -> Ordering {
-        other.timestamp.cmp(&self.timestamp)
+        self.timestamp.cmp(&other.timestamp)
     }
 }
 
