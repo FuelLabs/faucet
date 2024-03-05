@@ -155,6 +155,13 @@ pub async fn start_server(
                 HeaderValue::from_static("public, max-age=3600, immutable"),
             )),
         )
+        .route(
+            "/sign-in",
+            get(routes::sign_in).layer(SetResponseHeaderLayer::<_>::overriding(
+                CACHE_CONTROL,
+                HeaderValue::from_static("public, max-age=3600, immutable"),
+            )),
+        )
         .route("/health", get(health))
         .route("/dispense", get(routes::dispense_info))
         .route(

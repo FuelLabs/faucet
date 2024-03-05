@@ -5,6 +5,7 @@ pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
 pub const CAPTCHA_KEY: &str = "CAPTCHA_KEY";
 pub const CAPTCHA_SECRET: &str = "CAPTCHA_SECRET";
 pub const WALLET_SECRET_KEY: &str = "WALLET_SECRET_KEY";
+pub const CLERK_KEY: &str = "CLERK_KEY";
 pub const PUBLIC_FUEL_NODE_URL: &str = "PUBLIC_FUEL_NODE_URL";
 pub const WALLET_SECRET_DEV_KEY: &str =
     "99ad179d4f892ff3124ccd817408ff8a4452d9c16bb1b4968b8a59797e13cd7a";

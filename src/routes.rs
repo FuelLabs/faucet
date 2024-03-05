@@ -40,7 +40,11 @@ lazy_static::lazy_static! {
 }
 
 #[memoize::memoize]
-pub fn render_page(public_node_url: String, captcha_key: Option<String>) -> String {
+pub fn render_main(
+    public_node_url: String,
+    captcha_key: Option<String>,
+    clerk_key: String,
+) -> String {
     let template = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
     // sub in values
     let mut handlebars = Handlebars::new();
@@ -50,6 +54,7 @@ pub fn render_page(public_node_url: String, captcha_key: Option<String>) -> Stri
     let mut data = BTreeMap::new();
     data.insert("page_title", "Fuel Faucet");
     data.insert("public_node_url", public_node_url.as_str());
+    data.insert("clerk_public_key", clerk_key.as_str());
     // if captcha is enabled, add captcha key
     if let Some(captcha_key) = &captcha_key {
         data.insert("captcha_key", captcha_key.as_str());
@@ -58,10 +63,30 @@ pub fn render_page(public_node_url: String, captcha_key: Option<String>) -> Stri
     handlebars.render("index", &data).unwrap()
 }
 
+#[memoize::memoize]
+pub fn render_sign_in(clerk_key: String) -> String {
+    let template = include_str!(concat!(env!("OUT_DIR"), "/sign_in.html"));
+    // sub in values
+    let mut handlebars = Handlebars::new();
+    handlebars
+        .register_template_string("index", template)
+        .unwrap();
+    let mut data = BTreeMap::new();
+    data.insert("clerk_public_key", clerk_key.as_str());
+    // render page
+    handlebars.render("index", &data).unwrap()
+}
+
 pub async fn main(Extension(config): Extension<SharedConfig>) -> Html<String> {
     let public_node_url = config.public_node_url.clone();
     let captcha_key = config.captcha_key.clone();
-    Html(render_page(public_node_url, captcha_key))
+    let clerk_key = config.clerk_key.clone().unwrap();
+    Html(render_main(public_node_url, captcha_key, clerk_key))
+}
+
+pub async fn sign_in(Extension(config): Extension<SharedConfig>) -> Html<String> {
+    let clerk_key = config.clerk_key.clone().unwrap();
+    Html(render_sign_in(clerk_key))
 }
 
 #[tracing::instrument(skip(wallet))]
