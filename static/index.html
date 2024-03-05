@@ -231,9 +231,9 @@
           {{/if}}
           <div class="queued hidden">
             <div class="loader"></div>
-            <div id="dispensed">PoW enabled: getting funds</div>
           </div>
         </div>
+        <p class="description" id="dispensed"></p>
         <div id="response-failure"></div>
         <input type="submit" value="Give me Ether" id="submit_btn" class="button" />
       </form>
@@ -247,7 +247,6 @@
         let address = query.get("address");
         let worker = new Worker("./worker.js");
         let working = false;
-        let dispensedTokens = 0;
 
         worker.onmessage = function (event) {
           switch (event.data.type) {
@@ -255,7 +254,8 @@
               working = false;
               break;
             case "hash":
-              return call_dispense(event.data);
+              call_dispense(event.data);
+              return stop_pow();
             default:
               console.error("Unhandled event.data", event.data);
               return; // unhandled or TODO
@@ -358,13 +358,7 @@
               return;
             }
 
-            if (working && data.status === "Success" && typeof data.tokens === "number") {
-              dispensedTokens += data.tokens;
-
-              document.getElementById(
-                "dispensed"
-              ).textContent = `PoW enabled: getting funds (got ${dispensedTokens} so far)`;
-            }
+            document.getElementById("dispensed").textContent = `Funds sent!`;
           };
         }
 
