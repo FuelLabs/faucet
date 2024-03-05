@@ -322,11 +322,26 @@ async fn dispense_once_per_day() {
     let dispense_interval = 24 * 60 * 60;
     let time_increment = dispense_interval / 6;
 
-    let response = reqwest::Client::new()
+    let client = reqwest::Client::new();
+
+    let create_session_response: CreateSessionResponse = client
+        .post(format!("http://{addr}/session"))
+        .json(&json!({
+            "address": recipient_address_str,
+            "captcha": ""
+        }))
+        .send()
+        .await
+        .expect("Failed to send create_session request")
+        .json()
+        .await
+        .expect("Failed to deserialize create_session response");
+
+    let response = client
         .post(format!("http://{addr}/dispense"))
         .json(&json!({
-            "captcha": "",
-            "address": recipient_address_str.clone(),
+            "salt": create_session_response.salt,
+            "nonce": hex::encode(Salt::random().as_bytes()),
         }))
         .send()
         .await
@@ -340,8 +355,8 @@ async fn dispense_once_per_day() {
         let response = reqwest::Client::new()
             .post(format!("http://{addr}/dispense"))
             .json(&json!({
-                "captcha": "",
-                "address": recipient_address_str.clone(),
+                "salt": create_session_response.salt,
+                "nonce": hex::encode(Salt::random().as_bytes()),
             }))
             .send()
             .await
@@ -354,8 +369,8 @@ async fn dispense_once_per_day() {
     let response = reqwest::Client::new()
         .post(format!("http://{addr}/dispense"))
         .json(&json!({
-            "captcha": "",
-            "address": recipient_address_str.clone(),
+            "salt": create_session_response.salt,
+            "nonce": hex::encode(Salt::random().as_bytes()),
         }))
         .send()
         .await
