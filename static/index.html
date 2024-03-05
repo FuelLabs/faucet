@@ -92,6 +92,12 @@
       max-width: 95%;
     }
 
+    .cl-userButton-root {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+    }
+
     .from-control {
       display: flex;
       flex-direction: column;
@@ -145,6 +151,14 @@
       color: #949494;
     }
 
+    .agreements {
+      text-align: left;
+      margin-top: 25px;
+      line-height: 1.4em;
+      color: #555;
+      font-size: 14px;
+    }
+
     .queued {
       display: flex;
       flex-direction: column;
@@ -167,12 +181,6 @@
       width: 2rem;
       height: 2rem;
       animation: spin 2s linear infinite;
-    }
-
-    .cl-userButton-root {
-      position: absolute;
-      top: 10px;
-      right: 10px;
     }
 
     @keyframes spin {
@@ -256,9 +264,32 @@
             <div>Waiting until more tokens are available</div>
           </div>
         </div>
+        <div id="agreements" class="agreements">
+          <input type="checkbox" id="agreement1" name="agreement1" />
+          <label for="agreement1">
+            I acknowledge that this faucet is
+            <u><b class="bold">only used for testing</b></u
+            >.</label
+          ><br />
+          <input type="checkbox" id="agreement2" name="agreement2" />
+          <label for="agreement2">
+            I acknowledge that there are
+            <u><b class="bold">no incentives</b></u> to using this
+            faucet.</label
+          ><br />
+          <input type="checkbox" id="agreement3" name="agreement3" />
+          <label for="agreement3">
+            I agree not to spam this faucet, and know that I will be blocked if
+            I do.</label
+          ><br />
+        </div>
         <div id="response-failure"></div>
-        <div id="sign-app"></div>
-        <input type="submit" value="Give me Ether" class="button" id="submit" />
+        <input
+          type="submit"
+          disabled="true"
+          value="Give me Test Ether"
+          class="button"
+        />
       </form>
       <div id="response">
         <h2 class="response-title">Test Ether sent to the wallet</h2>
@@ -299,6 +330,17 @@
           }
         }
 
+        let agreements = document.getElementById("agreements");
+        function hasAgreed() {
+          let inputs = agreements.getElementsByTagName("input");
+          let inputsList = Array.prototype.slice.call(inputs);
+          return inputsList.every((i) => i.checked);
+        }
+
+        agreements.onchange = function () {
+          form.querySelector("input[type=submit]").disabled = !hasAgreed();
+        };
+
         function hasCaptcha() {
           return !!document.getElementsByClassName("captcha-container")[0];
         }
@@ -322,7 +364,7 @@
               .classList.remove("hidden");
           }
           document.getElementsByClassName("queued")[0].classList.add("hidden");
-          form.querySelector("input[type=submit]").disabled = false;
+          form.querySelector("input[type=submit]").disabled = !hasAgreed();
         }
 
         function give_me_coins(form) {
