@@ -9,8 +9,8 @@ pub struct DispenseInfoResponse {
 
 #[derive(Deserialize, Debug)]
 pub struct DispenseInput {
-    pub address: String,
-    pub captcha: String,
+    pub salt: String,
+    pub nonce: String,
 }
 
 #[derive(Serialize, Debug)]
@@ -21,6 +21,25 @@ pub struct DispenseResponse {
 
 #[derive(Debug)]
 pub struct DispenseError {
+    pub status: StatusCode,
+    pub error: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CreateSessionInput {
+    pub address: String,
+    pub captcha: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CreateSessionResponse {
+    pub status: String,
+    pub salt: String,
+    pub difficulty: u8,
+}
+
+#[derive(Debug)]
+pub struct CreateSessionError {
     pub status: StatusCode,
     pub error: String,
 }

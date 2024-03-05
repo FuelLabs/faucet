@@ -1,8 +1,8 @@
 use crate::constants::{
     CAPTCHA_KEY, CAPTCHA_SECRET, DEFAULT_DISPENSE_INTERVAL, DEFAULT_FAUCET_DISPENSE_AMOUNT,
     DEFAULT_NODE_URL, DEFAULT_PORT, DISPENSE_AMOUNT, DISPENSE_INTERVAL, FAUCET_ASSET_ID,
-    FUEL_NODE_URL, HUMAN_LOGGING, LOG_FILTER, MIN_GAS_PRICE, PUBLIC_FUEL_NODE_URL, SERVICE_PORT,
-    TIMEOUT_SECONDS, WALLET_SECRET_KEY,
+    FUEL_NODE_URL, HUMAN_LOGGING, LOG_FILTER, MIN_GAS_PRICE, POW_DIFFICULTY, PUBLIC_FUEL_NODE_URL,
+    SERVICE_PORT, TIMEOUT_SECONDS, WALLET_SECRET_KEY,
 };
 use fuels_core::types::AssetId;
 use secrecy::Secret;
@@ -23,6 +23,7 @@ pub struct Config {
     pub dispense_limit_interval: u64,
     pub min_gas_price: u64,
     pub timeout: u64,
+    pub pow_difficulty: u8,
 }
 
 impl Default for Config {
@@ -58,6 +59,10 @@ impl Default for Config {
                 .unwrap_or_else(|_| "30".to_string())
                 .parse::<u64>()
                 .expect("expected a valid integer for TIMEOUT_SECONDS"),
+            pow_difficulty: env::var(POW_DIFFICULTY)
+                .unwrap_or_else(|_| "20".to_string())
+                .parse::<u8>()
+                .expect("expected a valid integer [0, 255] for POW_DIFFICULTY"),
         }
     }
 }
