@@ -1,5 +1,9 @@
 use crate::{
-    models::*, recaptcha, session::{Salt, SessionMap}, CoinOutput, SharedConfig, SharedDispenseTracker, SharedFaucetState, SharedNetworkConfig, SharedSessions, SharedWallet
+    models::*,
+    recaptcha,
+    session::{Salt, SessionMap},
+    CoinOutput, SharedConfig, SharedDispenseTracker, SharedFaucetState, SharedNetworkConfig,
+    SharedSessions, SharedWallet,
 };
 use axum::{
     extract::Query,
