@@ -1,7 +1,7 @@
 use crate::{
     models::*,
     recaptcha,
-    session::{Salt, SessionMap},
+    session::Salt,
     CoinOutput, SharedConfig, SharedDispenseTracker, SharedFaucetState, SharedNetworkConfig,
     SharedSessions, SharedWallet,
 };
