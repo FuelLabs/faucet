@@ -4,13 +4,13 @@ use crate::{
     dispense_tracker::DispenseTracker,
     routes::health,
 };
-use anyhow::anyhow;
 use axum::{
     error_handling::HandleErrorLayer,
+    extract::Extension,
     http::{header::CACHE_CONTROL, HeaderValue, StatusCode},
     response::IntoResponse,
     routing::{get, post},
-    BoxError, Extension, Json, Router,
+    BoxError, Json, Router,
 };
 use fuel_core_client::client::FuelClient;
 use fuel_tx::UtxoId;
@@ -21,10 +21,10 @@ use fuels_core::types::transaction_builders::NetworkInfo;
 use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
 use std::{
-    net::{SocketAddr, TcpListener},
+    net::SocketAddr,
     sync::{Arc, Mutex},
-    time::Duration,
 };
+use time::ext::{NumericalDuration, NumericalStdDuration};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -32,6 +32,7 @@ use tower_http::{
     set_header::SetResponseHeaderLayer,
     trace::TraceLayer,
 };
+use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
 use tracing::info;
 
 pub mod config;
@@ -146,21 +147,33 @@ pub async fn start_server(
     info!("Faucet Account: {:#x}", Address::from(wallet.address()));
     info!("Faucet Balance: {}", balance);
 
+    let session_store = MemoryStore::default();
+    let session_layer = SessionManagerLayer::new(session_store)
+        .with_secure(false)
+        .with_expiry(Expiry::OnInactivity(NumericalDuration::days(7)));
+
+    let web_layer = ServiceBuilder::new()
+        .layer(SetResponseHeaderLayer::<_>::overriding(
+            CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=3600, immutable"),
+        ))
+        .layer(session_layer.clone())
+        .into_inner();
+
     // setup routes
     let app = Router::new()
-        .route(
-            "/",
-            get(routes::main).layer(SetResponseHeaderLayer::<_>::overriding(
-                CACHE_CONTROL,
-                HeaderValue::from_static("public, max-age=3600, immutable"),
-            )),
-        )
+        .route("/", get(routes::main).route_layer(web_layer.clone()))
         .route(
             "/sign-in",
-            get(routes::sign_in).layer(SetResponseHeaderLayer::<_>::overriding(
-                CACHE_CONTROL,
-                HeaderValue::from_static("public, max-age=3600, immutable"),
-            )),
+            get(routes::sign_in).route_layer(web_layer.clone()),
+        )
+        .route(
+            "/api/validate-session",
+            post(routes::validate_session).route_layer(web_layer.clone()),
+        )
+        .route(
+            "/api/remove-session",
+            post(routes::remove_session).route_layer(session_layer.clone()),
         )
         .route("/health", get(health))
         .route("/dispense", get(routes::dispense_info))
@@ -182,7 +195,7 @@ pub async fn start_server(
                 .layer(HandleErrorLayer::new(handle_error))
                 .load_shed()
                 .concurrency_limit(MAX_CONCURRENT_REQUESTS)
-                .timeout(Duration::from_secs(60))
+                .timeout(NumericalStdDuration::std_seconds(60))
                 .layer(TraceLayer::new_for_http())
                 .layer(Extension(Arc::new(wallet)))
                 .layer(Extension(Arc::new(client)))
@@ -203,17 +216,16 @@ pub async fn start_server(
 
     // run the server
     let addr = SocketAddr::from(([0, 0, 0, 0], service_config.service_port));
-    let listener = TcpListener::bind(addr).unwrap();
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     let bound_addr = listener.local_addr().unwrap();
     info!("listening on {}", bound_addr);
     (
         bound_addr,
         tokio::spawn(async move {
-            axum::Server::from_tcp(listener)
-                .unwrap()
-                .serve(app.into_make_service())
+            axum::serve(listener, app.into_make_service())
                 .await
-                .map_err(|e| anyhow!(e))
+                .unwrap();
+            Ok(())
         }),
     )
 }

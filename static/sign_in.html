@@ -55,9 +55,19 @@
       justify-content: center;
       align-items: center;
     }
+
+    .container {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
   </style>
 
   <body>
+    <div class="background"></div>
+    <div class="container">Loading...</div>
     <script
       async
       crossorigin="anonymous"
@@ -65,23 +75,33 @@
       src="https://thorough-wahoo-19.clerk.accounts.dev/npm/@clerk/clerk-js@4/dist/clerk.browser.js"
       type="text/javascript"
     ></script>
+    <script src="https://cdn.jsdelivr.net/npm/fetch-polyfill@0.8.2/fetch.min.js"></script>
     <script>
       window.addEventListener("load", async function () {
         await Clerk.load();
 
         if (Clerk.user) {
-          window.location.href = "/";
+          const sessionCookie = document.cookie;
+          const sessions = await Clerk.user.getSessions();
+          if (sessions.length) {
+            const res = await fetch("/api/validate-session", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ value: sessions[0]?.id }),
+            });
+            const data = await res.json();
+            if (data?.id) {
+              window.location.reload();
+            }
+          }
         } else {
           const body = document.getElementsByTagName("body")[0];
           const overlay = document.createElement("div");
           overlay.id = "overlay";
           body.appendChild(overlay);
-
-          Clerk.mountSignIn(overlay, {
-            onSuccess: () => {
-              window.location.href = "/";
-            },
-          });
+          Clerk.mountSignIn(overlay);
         }
       });
     </script>

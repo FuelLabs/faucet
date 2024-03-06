@@ -5,7 +5,8 @@ pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
 pub const CAPTCHA_KEY: &str = "CAPTCHA_KEY";
 pub const CAPTCHA_SECRET: &str = "CAPTCHA_SECRET";
 pub const WALLET_SECRET_KEY: &str = "WALLET_SECRET_KEY";
-pub const CLERK_KEY: &str = "CLERK_KEY";
+pub const CLERK_PUB_KEY: &str = "CLERK_PUB_KEY";
+pub const CLERK_SECRET_KEY: &str = "CLERK_SECRET_KEY";
 pub const PUBLIC_FUEL_NODE_URL: &str = "PUBLIC_FUEL_NODE_URL";
 pub const WALLET_SECRET_DEV_KEY: &str =
     "a449b1ffee0e2205fa924c6740cc48b3b473aa28587df6dab12abc245d1f5298";
@@ -17,7 +18,7 @@ pub const DEFAULT_DISPENSE_INTERVAL: u64 = 24 * 60 * 60;
 pub const DEFAULT_FAUCET_DISPENSE_AMOUNT: u64 = 10_000_000;
 pub const FAUCET_ASSET_ID: AssetId = AssetId::new([0; 32]);
 pub const SERVICE_PORT: &str = "PORT";
-pub const DEFAULT_PORT: u16 = 3002;
+pub const DEFAULT_PORT: u16 = 3001;
 
 pub const MIN_GAS_PRICE: &str = "MIN_GAS_PRICE";
 pub const TIMEOUT_SECONDS: &str = "TIMEOUT_SECONDS";

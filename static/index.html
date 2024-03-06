@@ -311,9 +311,20 @@
         if (Clerk.user) {
           const userBtn = document.querySelector(".user-button");
           Clerk.mountUserButton(userBtn);
-        } else {
-          window.location.href = "/sign-in";
         }
+
+        Clerk.addListener(async (resources) => {
+          if (!resources.session) {
+            const res = await fetch("/api/remove-session", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+            });
+            await res.json();
+            window.location.reload();
+          }
+        });
       });
     </script>
     <script>

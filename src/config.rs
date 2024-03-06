@@ -1,5 +1,5 @@
 use crate::constants::{
-    CAPTCHA_KEY, CAPTCHA_SECRET, CLERK_KEY, DEFAULT_DISPENSE_INTERVAL,
+    CAPTCHA_KEY, CAPTCHA_SECRET, CLERK_PUB_KEY, CLERK_SECRET_KEY, DEFAULT_DISPENSE_INTERVAL,
     DEFAULT_FAUCET_DISPENSE_AMOUNT, DEFAULT_NODE_URL, DEFAULT_PORT, DISPENSE_AMOUNT,
     DISPENSE_INTERVAL, FAUCET_ASSET_ID, FUEL_NODE_URL, HUMAN_LOGGING, LOG_FILTER, MIN_GAS_PRICE,
     PUBLIC_FUEL_NODE_URL, SERVICE_PORT, TIMEOUT_SECONDS, WALLET_SECRET_KEY,
@@ -15,7 +15,8 @@ pub struct Config {
     pub service_port: u16,
     pub captcha_key: Option<String>,
     pub captcha_secret: Option<Secret<String>>,
-    pub clerk_key: Option<String>,
+    pub clerk_pub_key: Option<String>,
+    pub clerk_secret_key: Option<Secret<String>>,
     pub node_url: String,
     pub public_node_url: String,
     pub wallet_secret_key: Option<Secret<String>>,
@@ -37,7 +38,9 @@ impl Default for Config {
             captcha_secret: env::var_os(CAPTCHA_SECRET)
                 .map(|s| Secret::new(s.into_string().unwrap())),
             captcha_key: env::var_os(CAPTCHA_KEY).map(|s| s.into_string().unwrap()),
-            clerk_key: env::var_os(CLERK_KEY).map(|s| s.into_string().unwrap()),
+            clerk_pub_key: env::var_os(CLERK_PUB_KEY).map(|s| s.into_string().unwrap()),
+            clerk_secret_key: env::var_os(CLERK_SECRET_KEY)
+                .map(|s| Secret::new(s.into_string().unwrap())),
             node_url: env::var(FUEL_NODE_URL).unwrap_or_else(|_| DEFAULT_NODE_URL.to_string()),
             public_node_url: env::var(PUBLIC_FUEL_NODE_URL)
                 .unwrap_or_else(|_| DEFAULT_NODE_URL.to_string()),

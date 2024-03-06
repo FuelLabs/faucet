@@ -1,4 +1,3 @@
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -21,6 +20,6 @@ pub struct DispenseResponse {
 
 #[derive(Debug)]
 pub struct DispenseError {
-    pub status: StatusCode,
+    pub status: axum::http::StatusCode,
     pub error: String,
 }

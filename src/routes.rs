@@ -3,10 +3,12 @@ use crate::{
     SharedNetworkConfig, SharedWallet,
 };
 use axum::{
-    response::{Html, IntoResponse, Response},
-    Extension, Json,
+    extract::Extension,
+    http::StatusCode,
+    response::{Html, IntoResponse, Redirect, Response},
+    Json,
 };
-
+use clerk_rs::{apis::sessions_api, clerk::Clerk, ClerkConfiguration};
 use fuel_core_client::client::FuelClient;
 use fuel_tx::UtxoId;
 use fuel_types::{Address, AssetId, Bytes32};
@@ -20,8 +22,8 @@ use fuels_core::types::{
 };
 use fuels_core::types::{input::Input, transaction_builders::ScriptTransactionBuilder};
 use handlebars::Handlebars;
-use reqwest::StatusCode;
 use secrecy::ExposeSecret;
+use serde::Deserialize;
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
@@ -30,6 +32,7 @@ use std::{
     str::FromStr,
     time::{SystemTime, UNIX_EPOCH},
 };
+use tower_sessions::Session;
 use tracing::{error, info};
 
 // The amount to fetch the biggest input of the faucet.
@@ -43,7 +46,7 @@ lazy_static::lazy_static! {
 pub fn render_main(
     public_node_url: String,
     captcha_key: Option<String>,
-    clerk_key: String,
+    clerk_pub_key: String,
 ) -> String {
     let template = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
     // sub in values
@@ -54,7 +57,7 @@ pub fn render_main(
     let mut data = BTreeMap::new();
     data.insert("page_title", "Fuel Faucet");
     data.insert("public_node_url", public_node_url.as_str());
-    data.insert("clerk_public_key", clerk_key.as_str());
+    data.insert("clerk_public_key", clerk_pub_key.as_str());
     // if captcha is enabled, add captcha key
     if let Some(captcha_key) = &captcha_key {
         data.insert("captcha_key", captcha_key.as_str());
@@ -64,7 +67,7 @@ pub fn render_main(
 }
 
 #[memoize::memoize]
-pub fn render_sign_in(clerk_key: String) -> String {
+pub fn render_sign_in(clerk_pub_key: String) -> String {
     let template = include_str!(concat!(env!("OUT_DIR"), "/sign_in.html"));
     // sub in values
     let mut handlebars = Handlebars::new();
@@ -72,25 +75,77 @@ pub fn render_sign_in(clerk_key: String) -> String {
         .register_template_string("index", template)
         .unwrap();
     let mut data = BTreeMap::new();
-    data.insert("clerk_public_key", clerk_key.as_str());
+    data.insert("clerk_public_key", clerk_pub_key.as_str());
     // render page
     handlebars.render("index", &data).unwrap()
 }
 
-pub async fn main(Extension(config): Extension<SharedConfig>) -> Html<String> {
+pub async fn main(
+    Extension(config): Extension<SharedConfig>,
+    session: Session,
+) -> impl IntoResponse {
     let public_node_url = config.public_node_url.clone();
     let captcha_key = config.captcha_key.clone();
-    let clerk_key = config.clerk_key.clone().unwrap();
-    Html(render_main(public_node_url, captcha_key, clerk_key))
+    let clerk_pub_key = config.clerk_pub_key.clone().unwrap();
+    let jwt_token: Option<String> = session.get("JWT_TOKEN").await.unwrap();
+
+    match jwt_token {
+        Some(_) => Html(render_main(public_node_url, captcha_key, clerk_pub_key)).into_response(),
+        None => Redirect::temporary("/sign-in").into_response(),
+    }
 }
 
-pub async fn sign_in(Extension(config): Extension<SharedConfig>) -> Html<String> {
-    let clerk_key = config.clerk_key.clone().unwrap();
-    Html(render_sign_in(clerk_key))
+pub async fn sign_in(
+    Extension(config): Extension<SharedConfig>,
+    session: Session,
+) -> impl IntoResponse {
+    let clerk_pub_key = config.clerk_pub_key.clone();
+    let jwt_token: Option<String> = session.get("JWT_TOKEN").await.unwrap();
+
+    match jwt_token {
+        Some(_) => Redirect::temporary("/").into_response(),
+        None => Html(render_sign_in(clerk_pub_key.unwrap())).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct SessionData {
+    value: String,
+}
+
+pub async fn validate_session(
+    Extension(config): Extension<SharedConfig>,
+    session_manager: Session,
+    Json(data): Json<SessionData>,
+) -> impl IntoResponse {
+    let clerk_secret_key = config.clerk_secret_key.clone().unwrap();
+    let clerk_key = Some(clerk_secret_key.expose_secret().clone());
+    let clerk_config = ClerkConfiguration::new(None, None, clerk_key, None);
+    let client = Clerk::new(clerk_config);
+    let res = sessions_api::Session::get_session(&client, data.value.as_str()).await;
+    let item = match res {
+        Ok(session) => {
+            session_manager
+                .insert("JWT_TOKEN", session.id.to_string())
+                .await
+                .unwrap();
+            (StatusCode::OK, Json(json!(session)))
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": e.to_string() })),
+        ),
+    };
+    item.into_response()
+}
+
+pub async fn remove_session(session_manager: Session) -> impl IntoResponse {
+    session_manager.remove_value("JWT_TOKEN").await.unwrap();
+    (StatusCode::OK, Json(json!({ "status": "OK" })))
 }
 
 #[tracing::instrument(skip(wallet))]
-pub async fn health(Extension(wallet): Extension<SharedWallet>) -> Response {
+pub async fn health(Extension(wallet): Extension<SharedWallet>) -> impl IntoResponse {
     // ping client for health
     let client = wallet
         .provider()
@@ -118,7 +173,6 @@ pub async fn health(Extension(wallet): Extension<SharedWallet>) -> Response {
             "fuel-core" : client,
         })),
     )
-        .into_response()
 }
 
 impl IntoResponse for DispenseResponse {
@@ -229,13 +283,13 @@ async fn submit_tx_with_timeout(
 
 #[tracing::instrument(skip(wallet, config))]
 pub async fn dispense_tokens(
-    Json(input): Json<DispenseInput>,
     Extension(wallet): Extension<SharedWallet>,
     Extension(state): Extension<SharedFaucetState>,
     Extension(config): Extension<SharedConfig>,
     Extension(client): Extension<Arc<FuelClient>>,
     Extension(network_config): Extension<SharedNetworkConfig>,
     Extension(dispense_tracker): Extension<SharedDispenseTracker>,
+    Json(input): Json<DispenseInput>,
 ) -> Result<DispenseResponse, DispenseError> {
     // parse deposit address
     let address = if let Ok(address) = Address::from_str(input.address.as_str()) {
