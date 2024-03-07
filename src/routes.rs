@@ -64,7 +64,7 @@ pub async fn main(Extension(config): Extension<SharedConfig>) -> Html<String> {
     Html(render_page(public_node_url, captcha_key))
 }
 
-#[tracing::instrument(skip(wallet))]
+#[tracing::instrument(skip_all)]
 pub async fn health(Extension(wallet): Extension<SharedWallet>) -> Response {
     // ping client for health
     let client = wallet
@@ -202,7 +202,7 @@ async fn submit_tx_with_timeout(
     Ok(())
 }
 
-#[tracing::instrument(skip(wallet, config))]
+#[tracing::instrument(skip_all)]
 pub async fn dispense_tokens(
     Json(input): Json<DispenseInput>,
     Extension(wallet): Extension<SharedWallet>,
@@ -352,7 +352,7 @@ pub async fn dispense_tokens(
     })
 }
 
-#[tracing::instrument(skip(config))]
+#[tracing::instrument(skip_all)]
 pub async fn dispense_info(
     Extension(config): Extension<SharedConfig>,
 ) -> Result<DispenseInfoResponse, DispenseError> {
