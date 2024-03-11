@@ -17,7 +17,7 @@ The faucet makes use of environment variables for configuration.
 | CAPTCHA_SECRET       | The secret key used for enabling Google captcha authentication.                                 |
 | CAPTCHA_KEY          | The website key used for enabling Google captcha authentication.                                |
 | CLERK_PUB_KEY        | The public key used for enabling clerk authentication.                                          |
-| CLER_SECRET_KEY      | The secret key used for enabling clerk authentication.                                          |
+| CLERK_SECRET_KEY      | The secret key used for enabling clerk authentication.                                          |
 | WALLET_SECRET_KEY    | A hex formatted string of the wallet private key that owns some tokens.                         |
 | FUEL_NODE_URL        | The GraphQL endpoint for connecting to fuel-core.                                               |
 | PUBLIC_FUEL_NODE_URL | The public GraphQL endpoint for connecting to fuel-core. Ex.: https://node.fuel.network/graphql |
