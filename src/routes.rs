@@ -281,7 +281,7 @@ async fn submit_tx_with_timeout(
     Ok(())
 }
 
-#[tracing::instrument(skip(wallet, config))]
+#[tracing::instrument(skip_all)]
 pub async fn dispense_tokens(
     Extension(wallet): Extension<SharedWallet>,
     Extension(state): Extension<SharedFaucetState>,
@@ -431,7 +431,7 @@ pub async fn dispense_tokens(
     })
 }
 
-#[tracing::instrument(skip(config))]
+#[tracing::instrument(skip_all)]
 pub async fn dispense_info(
     Extension(config): Extension<SharedConfig>,
 ) -> Result<DispenseInfoResponse, DispenseError> {
