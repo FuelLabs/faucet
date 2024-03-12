@@ -1,164 +1,95 @@
-import { html } from "htm/preact";
-import { Component } from "preact";
+import confetti from "https://esm.sh/canvas-confetti@1.6.0";
+import { useComputed, useSignal } from "@preact/signals";
+import { html } from "lib/html";
+import { PoW } from "lib/pow";
+import { useEffect } from "preact/hooks";
 
 import { Captcha } from "components/captcha";
-import { Checkbox } from "components/checkbox";
-
-const query = new URLSearchParams(document.location.search);
-const address = query.get("address");
 
 function AlertError({ error }) {
 	if (!error) return null;
 	return html`<div role="alert" class=${styles.alertError}>${error}</div>`;
 }
-function AlertSuccess({ explorerLink, isSent }) {
-	if (isSent) {
-		return html` <div role="alert" class=${styles.alertSuccess}>
-      <h2 class="text-green-700">Test Ether sent to the wallet</h2>
-      <a href=${explorerLink} class=${styles.explorerLink}
-        >See on Fuel Explorer</a
-      >
-    </div>`;
-	}
-	return null;
+
+function AlertClaimSuccess({ explorerLink }) {
+	return html` <div role="alert" class=${styles.alertSuccess}>
+    <h2 class="text-green-700">Test Ether sent to the wallet</h2>
+    <a href=${explorerLink} class=${styles.explorerLink}
+      >See on Fuel Explorer</a
+    >
+  </div>`;
 }
 
-export class FaucetForm extends Component {
-	state = {
-		value: address,
-		formHidden: false,
-		hasAgreed1: false,
-		hasAgreed2: false,
-		hasAgreed3: false,
-		isSent: false,
-		explorerLink: "#",
-		error: null,
-	};
+function AlertPowSuccess() {
+	return html` <div role="alert" class=${styles.alertPowSuccess}>
+    Funds sent to the wallet
+  </div>`;
+}
 
-	onSubmit = async (e) => {
+const query = new URLSearchParams(document.location.search);
+const queryAddress = query.get("address") ?? "";
+const pow = new PoW();
+
+export function FaucetForm({ providerUrl, captchaKey }) {
+	const state = useSignal(null);
+	const error = useSignal(null);
+	const address = useSignal(queryAddress);
+	const submitText = useSignal("Start PoW");
+	const explorerLink = useSignal(null);
+	const isSubmitDisabled = useComputed(
+		() =>
+			!address.value.length ||
+			state.value === "loading" ||
+			state.value === "pow:done",
+	);
+
+	const isPowDone = useComputed(() => state.value === "pow:done");
+	const isClaimSent = useComputed(
+		() => explorerLink.value && state.value === "done",
+	);
+
+	async function onSubmit(e) {
 		e.preventDefault();
-
-		const payload = {
-			address: this.state.value,
-		};
-
-		// if (this.hasCaptcha()) {
-		// 	const target = e.currentTarget;
-		// 	payload.captcha = target.querySelector(".g-recaptcha-response")?.value;
-		// }
-
-		try {
-			const res = await fetch("/api/dispense", {
-				method: "POST",
-				headers: {
-					Accept: "application/json",
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify(payload),
-			});
-
-			const data = await res.json();
-			if (data.error) {
-				this.setState((state) => ({
-					...state,
-					error: data.error,
-				}));
-				return;
-			}
-
-			const blockExplorer = "https://fuellabs.github.io/block-explorer-v2";
-			const providerUrl = this.props.providerUrl;
-			const encodedProviderUrl = encodeURIComponent(providerUrl);
-			const { value: address } = this.state;
-			this.setState((state) => ({
-				...state,
-				inSent: true,
-				formHidden: true,
-				explorerLink: `${blockExplorer}/address/${address}?providerUrl=${encodedProviderUrl}`,
-			}));
-		} catch (e) {
-			console.error(e);
-			this.setState((state) => ({
-				...state,
-				error: e.message,
-			}));
-		}
-	};
-
-	changeAgreement = (num) => {
-		return (e) => {
-			this.setState((state) => ({
-				...state,
-				[`hasAgreed${num}`]: e.currentTarget.checked,
-			}));
-		};
-	};
-
-	onInput = (e) => {
-		this.setState((state) => ({
-			...state,
-			value: e.currentTarget.value,
-		}));
-	};
-
-	hasCaptcha = () => {
-		return !!document.getElementsByClassName("captcha-container")[0];
-	};
-
-	render({ captchaKey }) {
-		const { formHidden } = this.state;
-		return html`
-      <div>
-        <form onSubmit=${this.onSubmit}>
-          ${this.formElement()}
-
-          <p class="text-center text-gray-800 text-sm [&_span]:font-bold">
-            This is a <span>Test Ether</span> faucet running on the${" "}
-            <span>Test Fuel network</span>. This faucet sends fake Ether assets
-            to the provided wallet address.
-          </p>
-
-          <${Captcha} captchaKey=${captchaKey} isHidden=${formHidden} />
-
-          <div class=${styles.agreements}>
-            <${Checkbox} id="agreement1" onChange=${this.changeAgreement(1)}>
-              I acknowledge that this faucet is <span>only used for testing</span>.
-            </${Checkbox}>
-            <${Checkbox} id="agreement2" onChange=${this.changeAgreement(2)}>
-              I acknowledge that there are <span>no incentives</span> to using this faucet.
-            </${Checkbox}>
-            <${Checkbox} id="agreement3" onChange=${this.changeAgreement(3)}>
-              I agree not to spam this faucet, and know that I will be blocked if I do.
-            </${Checkbox}>
-          </div>
-
-          <${AlertError} error=${this.state.error} />
-          <div class="text-center mt-6">
-            <button
-              type="submit"
-              class=${styles.submitButton}
-              disabled=${Boolean(
-								!this.state.value?.length ||
-									!this.state.hasAgreed1 ||
-									!this.state.hasAgreed2 ||
-									!this.state.hasAgreed3,
-							)}
-            >
-              Give me Test Ether
-            </button>
-          </div>
-        </form>
-        <${AlertSuccess}
-          explorerLink=${this.state.explorerLink}
-          isSent=${this.state.isSent}
-        />
-      </div>
-    `;
+		await pow.toggle();
 	}
 
-	formElement = () => {
-		const { value, formHidden } = this.state;
-		if (formHidden) return null;
+	function onInput(e) {
+		address.value = e.target.value;
+	}
+
+	useEffect(() => {
+		pow.setProviderUrl(providerUrl);
+		pow.setAddress(address.value);
+
+		if (!pow.isStarted) {
+			pow.start();
+		}
+
+		pow.onStart(() => {
+			submitText.value = "Stop PoW";
+		});
+		pow.onStop(() => {
+			submitText.value = "Start PoW";
+			state.value = "stopped";
+		});
+		pow.onError((err) => {
+			error.value = err;
+			state.value = "error";
+			submitText.value = "Start PoW";
+		});
+		pow.onFinish(() => {
+			state.value = "pow:done";
+			submitText.value = "Start PoW";
+			confetti({
+				particleCount: 100,
+				spread: 70,
+				origin: { y: 0.6 },
+			});
+		});
+	}, [providerUrl, address.value]);
+
+	function getForm() {
+		if (state === "done") return null;
 		return html`
       <div class=${styles.formWrapper}>
         <label for="address" class=${styles.label}>Wallet Address</label>
@@ -171,12 +102,45 @@ export class FaucetForm extends Component {
           placeholder="fuel100000... or 0x0000..."
           pattern="[a-z0-9]{63,66}"
           class=${styles.input}
-          value=${value}
-          onInput=${this.onInput}
+          value=${address.value}
+          onInput=${onInput}
         />
       </div>
     `;
-	};
+	}
+
+	return html`
+    <div>
+      <form onSubmit=${onSubmit}>
+        ${getForm()}
+        <p class="text-center text-gray-800 text-sm [&_span]:font-bold">
+          This is a <span>Test Ether</span> faucet running on the${" "}
+          <span>Test Fuel network</span>. This faucet sends fake Ether assets to
+          the provided wallet address.
+        </p>
+        <${Captcha}
+          captchaKey=${captchaKey}
+          isHidden=${state.value === "done"}
+        />
+        <${AlertError} error=${error.value} />
+        <div class="text-center mt-6">
+          <button
+            type="submit"
+            class=${styles.submitButton}
+            disabled=${isSubmitDisabled.value}
+          >
+            ${submitText.value}
+          </button>
+        </div>
+      </form>
+
+      ${isPowDone.value && html`<${AlertPowSuccess} />`}
+      ${
+				isClaimSent.value &&
+				html`<${AlertClaimSuccess} explorerLink=${explorerLink.value} />`
+			}
+    </div>
+  `;
 }
 
 const styles = {
@@ -189,8 +153,10 @@ const styles = {
 		"flex flex-col items-center py-2 px-4 border border-red-300 mt-6 gap-1 text-sm rounded-lg bg-red-50 text-red-800",
 	alertSuccess:
 		"flex flex-col items-center p-4 border border-gray-300 mt-6 gap-1 text-sm rounded-lg bg-gray-50",
+	alertPowSuccess:
+		"flex flex-col items-center p-4 border border-green-300 mt-6 gap-1 text-sm rounded-lg bg-green-50",
 	submitButton:
-		"text-white bg-green-700 hover:bg-green-800 font-medium rounded-lg text-sm px-5 py-2.5 me-2 mb-2 focus:outline-none disabled:bg-gray-300 disabled:text-gray-800 disabled:cursor-not-allowed",
+		"text-black bg-[#02F58C] font-medium rounded-lg text-sm px-5 py-2.5 me-2 mb-2 focus:outline-none disabled:bg-gray-300 disabled:text-gray-800 disabled:cursor-not-allowed",
 	agreements:
 		"flex flex-col gap-2 text-sm mt-6 py-4 border-t border-b border-gray-300 border-dashed [&_label>span]:font-bold",
 };

@@ -179,7 +179,7 @@ pub async fn start_server(
             get(routes::auth::handler).route_layer(web_layer.clone()),
         )
         .route(
-            "/api/dispense",
+            "/dispense",
             post(routes::dispense::tokens_handler).route_layer(
                 // Apply rate limiting specifically on the dispense endpoint, and
                 // only allow a single instance at a time to avoid race conditions

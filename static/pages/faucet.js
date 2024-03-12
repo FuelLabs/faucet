@@ -1,4 +1,4 @@
-import { html } from "htm/preact";
+import { html } from "lib/html";
 import { Component, render } from "preact";
 
 import { FaucetForm } from "components/faucet-form";

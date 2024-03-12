@@ -6,10 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet" />
     <script src="https://www.google.com/recaptcha/api.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/static/css/index.css" />
@@ -21,13 +18,16 @@
     <script type="importmap">
       {
         "imports": {
-          "preact": "https://esm.sh/preact@10.19.2",
-          "preact/": "https://esm.sh/preact@10.19.2/",
-          "htm/preact": "https://esm.sh/htm@3.1.1/preact?external=preact",
+          "preact": "https://esm.sh/preact@10.19.6",
+          "preact/hooks": "https://esm.sh/preact@10.19.6/hooks?external=preact",
+          "@preact/signals": "https://esm.sh/@preact/signals@1.2.2?external=preact",
+          "htm": "https://esm.sh/htm@3.1.1",
+          "mitt": "https://cdn.jsdelivr.net/npm/mitt@3.0.1/+esm",
+          "lib/html": "/static/lib/html.js",
+          "lib/pow": "/static/lib/pow.js",
           "components/faucet-form": "/static/components/faucet-form.js",
           "components/fuel-logo": "/static/components/fuel-logo.js",
           "components/captcha": "/static/components/captcha.js",
-          "components/checkbox": "/static/components/checkbox.js",
           "pages/faucet": "/static/pages/faucet.js",
           "pages/auth": "/static/pages/auth.js"
         }

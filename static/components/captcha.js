@@ -1,7 +1,7 @@
-import { html } from "htm/preact";
+import { html } from "lib/html";
 
 export function Captcha({ captchaKey, isHidden }) {
-	if (isHidden) {
+	if (!captchaKey || isHidden) {
 		return null;
 	}
 	return html`

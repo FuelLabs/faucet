@@ -1,4 +1,4 @@
-import { html } from "htm/preact";
+import { html } from "lib/html";
 import { Component } from "preact";
 
 export class FuelLogo extends Component {
