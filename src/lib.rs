@@ -2,7 +2,6 @@ use crate::{
     config::Config,
     constants::{MAX_CONCURRENT_REQUESTS, WALLET_SECRET_DEV_KEY},
     dispense_tracker::DispenseTracker,
-    routes::health,
     session::SessionMap,
 };
 use axum::{
@@ -24,7 +23,7 @@ use serde_json::json;
 use session::Salt;
 use std::{
     collections::HashMap,
-    net::{SocketAddr, TcpListener},
+    net::SocketAddr,
     sync::{Arc, Mutex},
 };
 use time::ext::{NumericalDuration, NumericalStdDuration};
@@ -46,10 +45,8 @@ mod constants;
 mod dispense_tracker;
 mod recaptcha;
 mod routes;
-mod static_files;
 
 pub use dispense_tracker::{Clock, TokioTime};
-pub use routes::THE_BIGGEST_AMOUNT;
 
 #[derive(Debug)]
 pub struct NetworkConfig {
@@ -132,6 +129,7 @@ pub async fn start_server(
         .wallet_secret_key
         .clone()
         .unwrap_or_else(|| Secret::new(WALLET_SECRET_DEV_KEY.to_string()));
+
     let wallet = WalletUnlocked::new_from_private_key(
         secret
             .expose_secret()
@@ -165,30 +163,24 @@ pub async fn start_server(
         ))
         .layer(session_layer.clone())
         .into_inner();
+
     let pow_difficulty = service_config.pow_difficulty;
     let sessions: SharedSessions = Arc::new(tokio::sync::Mutex::new(SessionMap::new()));
 
     // setup routes
     let app = Router::new()
-        .route("/", get(routes::main).route_layer(web_layer.clone()))
+        .nest("/static", routes::static_files::handler("static"))
+        .route(
+            "/",
+            get(routes::main::handler).route_layer(web_layer.clone()),
+        )
         .route(
             "/auth",
-            get(routes::auth).route_layer(web_layer.clone()),
+            get(routes::auth::handler).route_layer(web_layer.clone()),
         )
         .route(
-            "/api/validate-session",
-            post(routes::validate_session).route_layer(web_layer.clone()),
-        )
-        .route(
-            "/api/remove-session",
-            post(routes::remove_session).route_layer(session_layer.clone()),
-        )
-        .nest("/worker.js", routes::serve_worker())
-        .route("/health", get(health))
-        .route("/dispense", get(routes::dispense_info))
-        .route(
-            "/dispense",
-            post(routes::dispense_tokens).route_layer(
+            "/api/dispense",
+            post(routes::dispense::tokens_handler).route_layer(
                 // Apply rate limiting specifically on the dispense endpoint, and
                 // only allow a single instance at a time to avoid race conditions
                 ServiceBuilder::new()
@@ -198,7 +190,16 @@ pub async fn start_server(
                     .into_inner(),
             ),
         )
-        .nest("/static", static_files::router("static"))
+        .route(
+            "/api/validate-session",
+            post(routes::validate_session::handler).route_layer(web_layer.clone()),
+        )
+        .route(
+            "/api/remove-session",
+            post(routes::remove_session::handler).route_layer(session_layer.clone()),
+        )
+        .route("/dispense", get(routes::dispense::info_handler))
+        .route("/health", get(routes::health::handler))
         .layer(
             ServiceBuilder::new()
                 // Handle errors from middleware
@@ -223,16 +224,16 @@ pub async fn start_server(
                 )
                 .into_inner(),
         )
-        .route("/session", get(routes::get_session))
+        .route("/session", get(routes::get_session::handler))
         .layer(Extension(sessions.clone()))
-        .route("/session", post(routes::create_session))
+        .route("/session", post(routes::create_session::handler))
         .layer(
             ServiceBuilder::new()
                 // Handle errors from middleware
                 .layer(HandleErrorLayer::new(handle_error))
                 .load_shed()
                 .concurrency_limit(MAX_CONCURRENT_REQUESTS)
-                .timeout(Duration::from_secs(60))
+                .timeout(NumericalStdDuration::std_seconds(60))
                 .layer(TraceLayer::new_for_http())
                 .layer(Extension(sessions.clone()))
                 .layer(Extension(Arc::new(pow_difficulty)))

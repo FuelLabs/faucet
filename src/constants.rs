@@ -19,7 +19,6 @@ pub const DEFAULT_FAUCET_DISPENSE_AMOUNT: u64 = 10_000_000;
 pub const FAUCET_ASSET_ID: AssetId = AssetId::new([0; 32]);
 pub const SERVICE_PORT: &str = "PORT";
 pub const DEFAULT_PORT: u16 = 3000;
-
 pub const MIN_GAS_PRICE: &str = "MIN_GAS_PRICE";
 pub const TIMEOUT_SECONDS: &str = "TIMEOUT_SECONDS";
 pub const POW_DIFFICULTY: &str = "POW_DIFFICULTY";

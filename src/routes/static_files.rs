@@ -8,7 +8,7 @@ use axum::{
 use std::path::Path;
 use tower_http::services::ServeDir;
 
-pub async fn content_type_middleware(req: Request<Body>, next: Next) -> Response {
+async fn content_type_middleware(req: Request<Body>, next: Next) -> Response {
     let uri = req.uri().to_owned();
     let path = uri.path();
     let splited = path.split('.').collect::<Vec<_>>();
@@ -39,7 +39,7 @@ pub async fn content_type_middleware(req: Request<Body>, next: Next) -> Response
     }
 }
 
-pub fn router<P: AsRef<Path>>(path: P) -> Router {
+pub fn handler<P: AsRef<Path>>(path: P) -> Router {
     let serve_dir = ServeDir::new(path);
 
     Router::new()

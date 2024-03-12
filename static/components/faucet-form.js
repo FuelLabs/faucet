@@ -40,7 +40,6 @@ export class FaucetForm extends Component {
 
 		const payload = {
 			address: this.state.value,
-			captcha: "",
 		};
 
 		// if (this.hasCaptcha()) {
@@ -49,7 +48,7 @@ export class FaucetForm extends Component {
 		// }
 
 		try {
-			const res = await fetch("/dispense", {
+			const res = await fetch("/api/dispense", {
 				method: "POST",
 				headers: {
 					Accept: "application/json",
@@ -78,7 +77,7 @@ export class FaucetForm extends Component {
 				explorerLink: `${blockExplorer}/address/${address}?providerUrl=${encodedProviderUrl}`,
 			}));
 		} catch (e) {
-			console.log("error");
+			console.error(e);
 			this.setState((state) => ({
 				...state,
 				error: e.message,

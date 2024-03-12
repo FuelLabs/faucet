@@ -23,6 +23,5 @@ impl Salt {
 }
 
 pub type Pow = (Address, Salt, u64);
-
 pub type SessionMap = HashMap<Salt, Address>;
 pub type ProofMap = HashMap<Pow, bool>;
