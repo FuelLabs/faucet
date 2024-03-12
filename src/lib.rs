@@ -48,6 +48,9 @@ mod routes;
 
 pub use dispense_tracker::{Clock, TokioTime};
 
+// The amount to fetch the biggest input of the faucet.
+pub const THE_BIGGEST_AMOUNT: u64 = u32::MAX as u64;
+
 #[derive(Debug)]
 pub struct NetworkConfig {
     pub network_info: NetworkInfo,
