@@ -8,7 +8,7 @@ use axum::{
     error_handling::HandleErrorLayer,
     extract::Extension,
     http::{header::CACHE_CONTROL, HeaderValue, StatusCode},
-    response::{IntoResponse, Redirect},
+    response::IntoResponse,
     routing::{get, post},
     BoxError, Json, Router,
 };
