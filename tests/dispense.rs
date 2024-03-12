@@ -209,7 +209,7 @@ async fn _dispense_sends_coins_to_valid_address(
     let client = reqwest::Client::new();
 
     let create_session_response: CreateSessionResponse = client
-        .post(format!("http://{addr}/session"))
+        .post(format!("http://{addr}/api/session"))
         .json(&json!({
             "address": recipient_address_str,
             "captcha": ""
@@ -222,7 +222,7 @@ async fn _dispense_sends_coins_to_valid_address(
         .expect("Failed to deserialize create_session response");
 
     client
-        .post(format!("http://{addr}/dispense"))
+        .post(format!("http://{addr}/api/dispense"))
         .json(&json!({
             "salt": create_session_response.salt,
             "nonce": "0",
@@ -267,7 +267,7 @@ async fn many_concurrent_requests() {
             let client = reqwest::Client::new();
 
             let create_session_response: CreateSessionResponse = client
-                .post(format!("http://{addr}/session"))
+                .post(format!("http://{addr}/api/session"))
                 .json(&json!({
                     "address": recipient,
                     "captcha": ""
@@ -280,7 +280,7 @@ async fn many_concurrent_requests() {
                 .expect("Failed to deserialize create_session response");
 
             client
-                .post(format!("http://{addr}/dispense"))
+                .post(format!("http://{addr}/api/dispense"))
                 .json(&json!({
                     "salt": create_session_response.salt,
                     "nonce": hex::encode(Salt::random().as_bytes()),
@@ -325,7 +325,7 @@ async fn dispense_once_per_day() {
     let client = reqwest::Client::new();
 
     let create_session_response: CreateSessionResponse = client
-        .post(format!("http://{addr}/session"))
+        .post(format!("http://{addr}/api/session"))
         .json(&json!({
             "address": recipient_address_str,
             "captcha": ""
@@ -338,7 +338,7 @@ async fn dispense_once_per_day() {
         .expect("Failed to deserialize create_session response");
 
     let response = client
-        .post(format!("http://{addr}/dispense"))
+        .post(format!("http://{addr}/api/dispense"))
         .json(&json!({
             "salt": create_session_response.salt,
             "nonce": hex::encode(Salt::random().as_bytes()),
@@ -353,7 +353,7 @@ async fn dispense_once_per_day() {
         context.clock.advance(time_increment);
 
         let response = reqwest::Client::new()
-            .post(format!("http://{addr}/dispense"))
+            .post(format!("http://{addr}/api/dispense"))
             .json(&json!({
                 "salt": create_session_response.salt,
                 "nonce": hex::encode(Salt::random().as_bytes()),
@@ -367,7 +367,7 @@ async fn dispense_once_per_day() {
 
     context.clock.advance(time_increment + 1);
     let response = reqwest::Client::new()
-        .post(format!("http://{addr}/dispense"))
+        .post(format!("http://{addr}/api/dispense"))
         .json(&json!({
             "salt": create_session_response.salt,
             "nonce": hex::encode(Salt::random().as_bytes()),

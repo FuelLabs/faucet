@@ -29,35 +29,27 @@ export class PoW {
 	}
 
 	start() {
-		if (this.isStarted) return;
-		if (!this.address) {
-			emitter.emit("error", "Address not set");
-			return;
-		}
-		if (!this.providerUrl) {
-			emitter.emit("error", "Provider URL not set");
-			return;
-		}
-
 		worker.onmessage = async (event) => {
 			switch (event.data.type) {
-				case "finish":
-					emitter.emit("finish", event.data);
-					break;
 				case "hash": {
-					const hash = await this.callDispense(event.data.value);
-					emitter.emit("hash", hash);
-					this.hash = hash;
-					this.stop();
+					try {
+						console.log("hash", event.data);
+						const hash = await this.callDispense(event.data.value);
+						this.hash = hash;
+						emitter.emit("done", hash);
+					} catch (error) {
+						emitter.emit("error", error);
+					}
 					break;
 				}
 				case "stopped":
+					console.log("stopped", event.data);
 					this.setWorking(false);
 					emitter.emit("stop");
 					break;
 				default:
-					emitter.emit("error", event.data);
 					console.error("Unhandled event.data", event.data);
+					emitter.emit("error", event.data);
 					return; // unhandled or TODO
 			}
 		};
@@ -87,7 +79,7 @@ export class PoW {
 		// }
 
 		try {
-			const response = await fetch("/session", {
+			const response = await fetch("/api/session", {
 				method: "POST",
 				headers: {
 					Accept: "application/json",
@@ -100,7 +92,7 @@ export class PoW {
 			if (data.error) {
 				this.stop();
 				emitter.emit("error", data.error);
-				return;
+				throw new Error(data.error);
 			}
 
 			this.setWorking(true);
@@ -115,7 +107,7 @@ export class PoW {
 	}
 
 	async callDispense(payload) {
-		const res = await fetch("/dispense", {
+		const res = await fetch("/api/dispense", {
 			method: "POST",
 			headers: {
 				Accept: "application/json",
@@ -126,8 +118,9 @@ export class PoW {
 
 		const data = await res.json();
 		if (data.error) {
+			this.stop();
 			emitter.emit("error", data.error);
-			return;
+			throw new Error(data.error);
 		}
 		return data;
 	}
@@ -142,9 +135,9 @@ export class PoW {
 		return () => emitter.off("stop", cb);
 	}
 
-	onFinish(cb) {
-		emitter.on("finish", cb);
-		return () => emitter.off("finish", cb);
+	onDone(cb) {
+		emitter.on("done", cb);
+		return () => emitter.off("done", cb);
 	}
 
 	onError(cb) {

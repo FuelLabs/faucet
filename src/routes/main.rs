@@ -54,15 +54,20 @@ pub async fn handler(
     let clerk_pub_key = config.clerk_pub_key.clone().unwrap_or("".to_string());
     let jwt_token: Option<String> = session.get("JWT_TOKEN").await.unwrap();
 
-    match jwt_token {
-        Some(_) => Html(render_main(public_node_url, captcha_key, clerk_pub_key)).into_response(),
-        None => {
-            let value = method.method.as_ref();
-            if value.unwrap() == "auth" {
-                Redirect::temporary("/auth").into_response()
-            } else {
-                Html(render_main(public_node_url, captcha_key, clerk_pub_key)).into_response()
-            }
-        }
+    let redirect_to_auth = || Redirect::temporary("/auth").into_response();
+    let html_response =
+        || Html(render_main(public_node_url, captcha_key, clerk_pub_key)).into_response();
+
+    if jwt_token.is_some() {
+        return html_response();
+    }
+
+    let value = method.method.as_ref();
+    match value {
+        None => redirect_to_auth(),
+        Some(value) => match value.as_str() {
+            "pow" => html_response(),
+            _ => redirect_to_auth(),
+        },
     }
 }

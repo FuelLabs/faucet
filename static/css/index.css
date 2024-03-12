@@ -37,19 +37,20 @@ body,
 }
 
 .loader {
-  border: 0.4rem solid #f3f3f3;
-  border-top: 0.4rem solid #00f58c;
+  width: 24px;
+  height: 24px;
+  border: 3px solid #eee;
+  border-bottom-color: #02f58c;
   border-radius: 50%;
-  width: 2rem;
-  height: 2rem;
-  animation: spin 2s linear infinite;
+  display: inline-block;
+  box-sizing: border-box;
+  animation: rotation 1s linear infinite;
 }
 
-@keyframes spin {
+@keyframes rotation {
   0% {
     transform: rotate(0deg);
   }
-
   100% {
     transform: rotate(360deg);
   }

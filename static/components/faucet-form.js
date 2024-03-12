@@ -31,14 +31,14 @@ const queryAddress = query.get("address") ?? "";
 const pow = new PoW();
 
 export function FaucetForm({ providerUrl, captchaKey }) {
-	const state = useSignal(null);
+	const state = useSignal("idle");
 	const error = useSignal(null);
 	const address = useSignal(queryAddress);
+	const explorerLink = useSignal(null);
 	const submitText = useSignal(
 		pow.isUsing ? "Start PoW" : "Give me test Ether",
 	);
 
-	const explorerLink = useSignal(null);
 	const isSubmitDisabled = useComputed(
 		() =>
 			!address.value.length ||
@@ -46,17 +46,19 @@ export function FaucetForm({ providerUrl, captchaKey }) {
 			state.value === "pow:done",
 	);
 
-	const isPowDone = useComputed(() => state.value === "pow:done");
-	const isClaimSent = useComputed(
-		() => explorerLink.value && state.value === "done",
-	);
+	const isPowDone = useComputed(() => {
+		return state.value === "pow:done";
+	});
+	const isClaimSent = useComputed(() => {
+		return explorerLink.value && state.value === "done";
+	});
 
 	async function onSubmit(e) {
 		e.preventDefault();
 		if (pow.isUsing) {
 			await pow.toggle();
 		} else {
-			//
+			// todo: sned claim with auth
 		}
 	}
 
@@ -67,36 +69,40 @@ export function FaucetForm({ providerUrl, captchaKey }) {
 	useEffect(() => {
 		pow.setProviderUrl(providerUrl);
 		pow.setAddress(address.value);
-
-		if (!pow.isStarted) {
-			pow.start();
-		}
-
-		pow.onStart(() => {
-			submitText.value = "Stop PoW";
-		});
-		pow.onStop(() => {
-			submitText.value = "Start PoW";
-			state.value = "stopped";
-		});
-		pow.onError((err) => {
-			error.value = err;
-			state.value = "error";
-			submitText.value = "Start PoW";
-		});
-		pow.onFinish(() => {
-			state.value = "pow:done";
-			submitText.value = "Start PoW";
-			confetti({
-				particleCount: 100,
-				spread: 70,
-				origin: { y: 0.6 },
-			});
-		});
+		pow.start();
+		const subs = [
+			pow.onStart(() => {
+				submitText.value = "Stop PoW";
+				state.value = "pow:working";
+				error.value = null;
+			}),
+			pow.onStop(() => {
+				submitText.value = "Start PoW";
+				state.value = "pow:stopped";
+			}),
+			pow.onError((err) => {
+				error.value = err ?? err.toString().message ?? "Unknown error";
+				state.value = "pow:error";
+				submitText.value = "Start PoW";
+			}),
+			pow.onDone(() => {
+				error.value = null;
+				submitText.value = "Start PoW";
+				state.value = "pow:done";
+				confetti({
+					particleCount: 100,
+					spread: 70,
+					origin: { y: 0.6 },
+				});
+			}),
+		];
+		return () => {
+			subs.forEach((sub) => sub());
+		};
 	}, [providerUrl, address.value]);
 
 	function getForm() {
-		if (state === "done") return null;
+		if (state.value.includes("done")) return null;
 		return html`
       <div class=${styles.formWrapper}>
         <label for="address" class=${styles.label}>Wallet Address</label>
@@ -127,10 +133,14 @@ export function FaucetForm({ providerUrl, captchaKey }) {
         </p>
         <${Captcha}
           captchaKey=${captchaKey}
-          isHidden=${state.value === "done"}
+          isHidden=${state.value.includes("done")}
         />
-        <${AlertError} error=${error.value} />
-        <div class="text-center mt-6">
+        <${AlertError} error=${error.value?.toString()} />
+        <div
+          class=${`text-center mt-6 ${
+						state.value.includes("done") && "hidden"
+					}`}
+        >
           <button
             type="submit"
             class=${styles.submitButton}
@@ -139,6 +149,19 @@ export function FaucetForm({ providerUrl, captchaKey }) {
             ${submitText.value}
           </button>
         </div>
+        ${
+					state.value === "pow:working" &&
+					html`
+          <div
+            class="w-full flex items-center justify-center mt-2 text-sm text-gray-500"
+          >
+            <span class="loader w-4 h-4"></span>
+            <span class="ms-2"
+              >Please, waiting until Proof of Work get finished!</span
+            >
+          </div>
+        `
+				}
       </form>
 
       ${isPowDone.value && html`<${AlertPowSuccess} />`}
@@ -163,7 +186,7 @@ const styles = {
 	alertPowSuccess:
 		"flex flex-col items-center p-4 border border-green-300 mt-6 gap-1 text-sm rounded-lg bg-green-50",
 	submitButton:
-		"text-black bg-[#02F58C] font-medium rounded-lg text-sm px-5 py-2.5 me-2 mb-2 focus:outline-none disabled:bg-gray-300 disabled:text-gray-800 disabled:cursor-not-allowed",
+		"text-black bg-[#02F58C] font-medium rounded-lg text-sm px-5 py-2.5 me-2 mb-2 disabled:bg-gray-300 disabled:text-gray-800 disabled:cursor-not-allowed",
 	agreements:
 		"flex flex-col gap-2 text-sm mt-6 py-4 border-t border-b border-gray-300 border-dashed [&_label>span]:font-bold",
 };

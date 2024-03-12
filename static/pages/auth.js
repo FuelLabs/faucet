@@ -24,7 +24,7 @@ class App extends Component {
 		if (Clerk.user) {
 			const sessions = await Clerk.user.getSessions();
 			if (sessions.length) {
-				const res = await fetch("/api/validate-session", {
+				const res = await fetch("/api/session/validate", {
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",

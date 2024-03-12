@@ -167,17 +167,7 @@ pub async fn start_server(
     let pow_difficulty = service_config.pow_difficulty;
     let sessions: SharedSessions = Arc::new(tokio::sync::Mutex::new(SessionMap::new()));
 
-    // setup routes
-    let app = Router::new()
-        .nest("/static", routes::static_files::handler("static"))
-        .route(
-            "/",
-            get(routes::main::handler).route_layer(web_layer.clone()),
-        )
-        .route(
-            "/auth",
-            get(routes::auth::handler).route_layer(web_layer.clone()),
-        )
+    let api_routes = Router::new()
         .route(
             "/dispense",
             post(routes::dispense::tokens_handler).route_layer(
@@ -191,12 +181,41 @@ pub async fn start_server(
             ),
         )
         .route(
-            "/api/validate-session",
+            "/session/validate",
             post(routes::validate_session::handler).route_layer(web_layer.clone()),
         )
         .route(
-            "/api/remove-session",
+            "/session/remove",
             post(routes::remove_session::handler).route_layer(session_layer.clone()),
+        )
+        .route("/session", get(routes::get_session::handler))
+        .layer(Extension(sessions.clone()))
+        .route("/session", post(routes::create_session::handler))
+        .layer(
+            ServiceBuilder::new()
+                // Handle errors from middleware
+                .layer(HandleErrorLayer::new(handle_error))
+                .load_shed()
+                .concurrency_limit(MAX_CONCURRENT_REQUESTS)
+                .timeout(NumericalStdDuration::std_seconds(60))
+                .layer(TraceLayer::new_for_http())
+                .layer(Extension(sessions.clone()))
+                .layer(Extension(Arc::new(pow_difficulty)))
+                .layer(Extension(Arc::new(service_config.clone())))
+                .into_inner(),
+        );
+
+    // setup routes
+    let app = Router::new()
+        .nest("/api", api_routes)
+        .nest("/static", routes::static_files::handler("static"))
+        .route(
+            "/",
+            get(routes::main::handler).route_layer(web_layer.clone()),
+        )
+        .route(
+            "/auth",
+            get(routes::auth::handler).route_layer(web_layer.clone()),
         )
         .route("/dispense", get(routes::dispense::info_handler))
         .route("/health", get(routes::health::handler))
@@ -222,22 +241,6 @@ pub async fn start_server(
                         .allow_methods(Any)
                         .allow_headers(Any),
                 )
-                .into_inner(),
-        )
-        .route("/session", get(routes::get_session::handler))
-        .layer(Extension(sessions.clone()))
-        .route("/session", post(routes::create_session::handler))
-        .layer(
-            ServiceBuilder::new()
-                // Handle errors from middleware
-                .layer(HandleErrorLayer::new(handle_error))
-                .load_shed()
-                .concurrency_limit(MAX_CONCURRENT_REQUESTS)
-                .timeout(NumericalStdDuration::std_seconds(60))
-                .layer(TraceLayer::new_for_http())
-                .layer(Extension(sessions.clone()))
-                .layer(Extension(Arc::new(pow_difficulty)))
-                .layer(Extension(Arc::new(service_config.clone())))
                 .into_inner(),
         );
 

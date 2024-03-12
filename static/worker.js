@@ -34,19 +34,20 @@ onmessage = async function (ev) {
 			.map((b) => b.toString(16).padStart(2, "0"))
 			.join("");
 
+		console.log(hash);
 		const bn = BigInt(`0x${hash}`);
 
 		if (bn <= target) {
+			console.log("found hash", hash);
+			working = false;
 			this.postMessage({
 				type: "hash",
 				value: { salt, nonce: `${i}`, hash },
 			});
+		} else {
+			i += 1;
 		}
-
-		i++;
 	}
-
-	this.postMessage({ type: "finish" });
 };
 
 function getRandomSalt() {

@@ -18,7 +18,7 @@ if (method === "auth") {
 
 		Clerk.addListener(async (resources) => {
 			if (!resources.session) {
-				const res = await fetch("/api/remove-session", {
+				const res = await fetch("/api/session/remove", {
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",
