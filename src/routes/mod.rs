@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod create_session;
 pub mod dispense;
+pub mod favicon;
 pub mod get_session;
 pub mod health;
 pub mod main;

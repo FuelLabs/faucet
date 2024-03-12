@@ -8,7 +8,7 @@ use axum::{
     error_handling::HandleErrorLayer,
     extract::Extension,
     http::{header::CACHE_CONTROL, HeaderValue, StatusCode},
-    response::IntoResponse,
+    response::{IntoResponse, Redirect},
     routing::{get, post},
     BoxError, Json, Router,
 };
@@ -209,6 +209,7 @@ pub async fn start_server(
     let app = Router::new()
         .nest("/api", api_routes)
         .nest("/static", routes::static_files::handler("static"))
+        .route("/favicon.ico", get(routes::favicon::handler))
         .route(
             "/",
             get(routes::main::handler).route_layer(web_layer.clone()),

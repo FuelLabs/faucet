@@ -20,6 +20,7 @@ async fn content_type_middleware(req: Request<Body>, next: Next) -> Response {
             "css" => "text/css",
             "js" => "text/javascript",
             "ps" => "application/postscript",
+            "svg" => "image/svg+xml",
             _ => "application/octet-stream",
         };
 
