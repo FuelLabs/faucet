@@ -3,6 +3,7 @@ use crate::{
     constants::{MAX_CONCURRENT_REQUESTS, WALLET_SECRET_DEV_KEY},
     dispense_tracker::DispenseTracker,
     routes::health,
+    session::SessionMap,
 };
 use axum::{
     error_handling::HandleErrorLayer,
@@ -20,8 +21,10 @@ use fuels_core::types::node_info::NodeInfo;
 use fuels_core::types::transaction_builders::NetworkInfo;
 use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
+use session::Salt;
 use std::{
-    net::SocketAddr,
+    collections::HashMap,
+    net::{SocketAddr, TcpListener},
     sync::{Arc, Mutex},
 };
 use time::ext::{NumericalDuration, NumericalStdDuration};
@@ -37,6 +40,7 @@ use tracing::info;
 
 pub mod config;
 pub mod models;
+pub mod session;
 
 mod constants;
 mod dispense_tracker;
@@ -94,6 +98,7 @@ pub type SharedWallet = Arc<WalletUnlocked>;
 pub type SharedConfig = Arc<Config>;
 pub type SharedNetworkConfig = Arc<NetworkConfig>;
 pub type SharedDispenseTracker = Arc<Mutex<DispenseTracker>>;
+pub type SharedSessions = Arc<tokio::sync::Mutex<HashMap<Salt, Address>>>;
 
 pub async fn start_server(
     service_config: Config,
@@ -160,6 +165,8 @@ pub async fn start_server(
         ))
         .layer(session_layer.clone())
         .into_inner();
+    let pow_difficulty = service_config.pow_difficulty;
+    let sessions: SharedSessions = Arc::new(tokio::sync::Mutex::new(SessionMap::new()));
 
     // setup routes
     let app = Router::new()
@@ -176,6 +183,7 @@ pub async fn start_server(
             "/api/remove-session",
             post(routes::remove_session).route_layer(session_layer.clone()),
         )
+        .nest("/worker.js", routes::serve_worker())
         .route("/health", get(health))
         .route("/dispense", get(routes::dispense_info))
         .route(
@@ -213,6 +221,22 @@ pub async fn start_server(
                         .allow_methods(Any)
                         .allow_headers(Any),
                 )
+                .into_inner(),
+        )
+        .route("/session", get(routes::get_session))
+        .layer(Extension(sessions.clone()))
+        .route("/session", post(routes::create_session))
+        .layer(
+            ServiceBuilder::new()
+                // Handle errors from middleware
+                .layer(HandleErrorLayer::new(handle_error))
+                .load_shed()
+                .concurrency_limit(MAX_CONCURRENT_REQUESTS)
+                .timeout(Duration::from_secs(60))
+                .layer(TraceLayer::new_for_http())
+                .layer(Extension(sessions.clone()))
+                .layer(Extension(Arc::new(pow_difficulty)))
+                .layer(Extension(Arc::new(service_config.clone())))
                 .into_inner(),
         );
 

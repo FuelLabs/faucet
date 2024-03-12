@@ -25,6 +25,7 @@ pub struct Config {
     pub dispense_limit_interval: u64,
     pub min_gas_price: u64,
     pub timeout: u64,
+    pub pow_difficulty: u8,
 }
 
 impl Default for Config {
@@ -63,6 +64,10 @@ impl Default for Config {
                 .unwrap_or_else(|_| "30".to_string())
                 .parse::<u64>()
                 .expect("expected a valid integer for TIMEOUT_SECONDS"),
+            pow_difficulty: env::var(POW_DIFFICULTY)
+                .unwrap_or_else(|_| "20".to_string())
+                .parse::<u8>()
+                .expect("expected a valid integer [0, 255] for POW_DIFFICULTY"),
         }
     }
 }
