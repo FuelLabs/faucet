@@ -33,7 +33,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use tower_sessions::Session;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 // The amount to fetch the biggest input of the faucet.
 pub const THE_BIGGEST_AMOUNT: u64 = u32::MAX as u64;
@@ -62,13 +62,14 @@ pub fn render_main(
     if let Some(captcha_key) = &captcha_key {
         data.insert("captcha_key", captcha_key.as_str());
     }
+    data.insert("page", "faucet");
     // render page
     handlebars.render("index", &data).unwrap()
 }
 
 #[memoize::memoize]
-pub fn render_sign_in(clerk_pub_key: String) -> String {
-    let template = include_str!(concat!(env!("OUT_DIR"), "/sign_in.html"));
+pub fn render_auth(clerk_pub_key: String) -> String {
+    let template = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
     // sub in values
     let mut handlebars = Handlebars::new();
     handlebars
@@ -76,6 +77,7 @@ pub fn render_sign_in(clerk_pub_key: String) -> String {
         .unwrap();
     let mut data = BTreeMap::new();
     data.insert("clerk_public_key", clerk_pub_key.as_str());
+    data.insert("page", "auth");
     // render page
     handlebars.render("index", &data).unwrap()
 }
@@ -86,16 +88,16 @@ pub async fn main(
 ) -> impl IntoResponse {
     let public_node_url = config.public_node_url.clone();
     let captcha_key = config.captcha_key.clone();
-    let clerk_pub_key = config.clerk_pub_key.clone().unwrap();
+    let clerk_pub_key = config.clerk_pub_key.clone().unwrap_or("".to_string());
     let jwt_token: Option<String> = session.get("JWT_TOKEN").await.unwrap();
 
     match jwt_token {
         Some(_) => Html(render_main(public_node_url, captcha_key, clerk_pub_key)).into_response(),
-        None => Redirect::temporary("/sign-in").into_response(),
+        None => Redirect::temporary("/auth").into_response(),
     }
 }
 
-pub async fn sign_in(
+pub async fn auth(
     Extension(config): Extension<SharedConfig>,
     session: Session,
 ) -> impl IntoResponse {
@@ -104,7 +106,7 @@ pub async fn sign_in(
 
     match jwt_token {
         Some(_) => Redirect::temporary("/").into_response(),
-        None => Html(render_sign_in(clerk_pub_key.unwrap())).into_response(),
+        None => Html(render_auth(clerk_pub_key.unwrap_or("".to_string()))).into_response(),
     }
 }
 
@@ -291,6 +293,8 @@ pub async fn dispense_tokens(
     Extension(dispense_tracker): Extension<SharedDispenseTracker>,
     Json(input): Json<DispenseInput>,
 ) -> Result<DispenseResponse, DispenseError> {
+    println!("dispense_tokens");
+    dbg!(&input);
     // parse deposit address
     let address = if let Ok(address) = Address::from_str(input.address.as_str()) {
         Ok(address)

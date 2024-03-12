@@ -42,6 +42,7 @@ mod constants;
 mod dispense_tracker;
 mod recaptcha;
 mod routes;
+mod static_files;
 
 pub use dispense_tracker::{Clock, TokioTime};
 pub use routes::THE_BIGGEST_AMOUNT;
@@ -164,8 +165,8 @@ pub async fn start_server(
     let app = Router::new()
         .route("/", get(routes::main).route_layer(web_layer.clone()))
         .route(
-            "/sign-in",
-            get(routes::sign_in).route_layer(web_layer.clone()),
+            "/auth",
+            get(routes::auth).route_layer(web_layer.clone()),
         )
         .route(
             "/api/validate-session",
@@ -189,6 +190,7 @@ pub async fn start_server(
                     .into_inner(),
             ),
         )
+        .nest("/static", static_files::router("static"))
         .layer(
             ServiceBuilder::new()
                 // Handle errors from middleware
@@ -214,20 +216,19 @@ pub async fn start_server(
                 .into_inner(),
         );
 
-    // run the server
     let addr = SocketAddr::from(([0, 0, 0, 0], service_config.service_port));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     let bound_addr = listener.local_addr().unwrap();
+    let task = tokio::spawn(async move {
+        axum::serve(listener, app.into_make_service())
+            .await
+            .unwrap();
+        Ok(())
+    });
+
+    // run the server
     info!("listening on {}", bound_addr);
-    (
-        bound_addr,
-        tokio::spawn(async move {
-            axum::serve(listener, app.into_make_service())
-                .await
-                .unwrap();
-            Ok(())
-        }),
-    )
+    (bound_addr, task)
 }
 
 async fn handle_error(error: BoxError) -> impl IntoResponse {

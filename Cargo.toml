@@ -12,6 +12,7 @@ description = "A token faucet for onboarding fuel users"
 [dependencies]
 anyhow = "1.0"
 axum = "0.7.4"
+axum_static = "1.2.3"
 clerk-rs = "0.2.3"
 fuel-core-client = "0.22.0"
 fuel-tx = "0.43.0"
@@ -37,7 +38,12 @@ tower = { version = "0.4", features = [
   "util",
   "timeout",
 ] }
-tower-http = { version = "0.5.2", features = ["cors", "trace", "set-header"] }
+tower-http = { version = "0.5.2", features = [
+  "fs",
+  "cors",
+  "trace",
+  "set-header",
+] }
 tower-sessions = "0.11.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }

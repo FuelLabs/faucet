@@ -11,5 +11,4 @@ fn build(page: &str, raw: &[u8]) {
 
 fn main() {
     build("index.html", include_bytes!("./static/index.html"));
-    build("sign_in.html", include_bytes!("./static/sign_in.html"));
 }
