@@ -9,8 +9,10 @@ pub struct DispenseInfoResponse {
 
 #[derive(Deserialize, Debug)]
 pub struct DispenseInput {
-    pub salt: String,
-    pub nonce: String,
+    pub salt: Option<String>,
+    pub nonce: Option<String>,
+    pub captcha: Option<String>,
+    pub address: Option<String>,
 }
 
 #[derive(Serialize, Debug)]

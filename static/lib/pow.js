@@ -1,7 +1,9 @@
-const worker = new Worker(new URL("/static/worker.js", import.meta.url));
 import mitt from "mitt";
 
+import { dispense, getSession } from "lib/api";
+
 const emitter = mitt();
+const worker = new Worker(new URL("/static/worker.js", import.meta.url));
 const query = new URLSearchParams(document.location.search);
 const method = query.get("method") ?? "pow";
 
@@ -79,16 +81,7 @@ export class PoW {
 		// }
 
 		try {
-			const response = await fetch("/api/session", {
-				method: "POST",
-				headers: {
-					Accept: "application/json",
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify(payload),
-			});
-
-			const data = await response.json();
+			const data = await getSession(payload);
 			if (data.error) {
 				this.stop();
 				emitter.emit("error", data.error);
@@ -107,16 +100,7 @@ export class PoW {
 	}
 
 	async callDispense(payload) {
-		const res = await fetch("/api/dispense", {
-			method: "POST",
-			headers: {
-				Accept: "application/json",
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify(payload),
-		});
-
-		const data = await res.json();
+		const data = await dispense(payload, "pow");
 		if (data.error) {
 			this.stop();
 			emitter.emit("error", data.error);

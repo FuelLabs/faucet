@@ -1,10 +1,11 @@
 import confetti from "https://esm.sh/canvas-confetti@1.6.0";
 import { useComputed, useSignal } from "@preact/signals";
-import { html } from "lib/html";
-import { PoW } from "lib/pow";
 import { useEffect } from "preact/hooks";
 
 import { Captcha } from "components/captcha";
+import { Claim } from "lib/claim";
+import { html } from "lib/html";
+import { PoW } from "lib/pow";
 
 function AlertError({ error }) {
 	if (!error) return null;
@@ -29,6 +30,7 @@ function AlertPowSuccess() {
 const query = new URLSearchParams(document.location.search);
 const queryAddress = query.get("address") ?? "";
 const pow = new PoW();
+const claim = new Claim();
 
 export function FaucetForm({ providerUrl, captchaKey }) {
 	const state = useSignal("idle");
@@ -46,11 +48,12 @@ export function FaucetForm({ providerUrl, captchaKey }) {
 			state.value === "pow:done",
 	);
 
+	const isDone = state.value?.includes("done");
+	const isClaimDone = useComputed(() => {
+		return state.value === "claim:done";
+	});
 	const isPowDone = useComputed(() => {
 		return state.value === "pow:done";
-	});
-	const isClaimSent = useComputed(() => {
-		return explorerLink.value && state.value === "done";
 	});
 
 	async function onSubmit(e) {
@@ -58,7 +61,8 @@ export function FaucetForm({ providerUrl, captchaKey }) {
 		if (pow.isUsing) {
 			await pow.toggle();
 		} else {
-			// todo: sned claim with auth
+			console.log("claim.dispense()");
+			await claim.dispense();
 		}
 	}
 
@@ -67,6 +71,30 @@ export function FaucetForm({ providerUrl, captchaKey }) {
 	}
 
 	useEffect(() => {
+		if (claim.isUsing) {
+			claim.setAddress(address.value);
+			claim.setProviderUrl(providerUrl);
+			const subs = [
+				claim.onDone((data) => {
+					console.log({ data });
+					state.value = "claim:done";
+					explorerLink.value = data.explorerLink;
+					confetti({
+						particleCount: 100,
+						spread: 70,
+						origin: { y: 0.6 },
+					});
+				}),
+				claim.onError((err) => {
+					error.value = err ?? err.toString().message ?? "Unknown error";
+					state.value = "claim:error";
+				}),
+			];
+			return () => {
+				subs.forEach((sub) => sub());
+			};
+		}
+
 		pow.setProviderUrl(providerUrl);
 		pow.setAddress(address.value);
 		pow.start();
@@ -102,7 +130,7 @@ export function FaucetForm({ providerUrl, captchaKey }) {
 	}, [providerUrl, address.value]);
 
 	function getForm() {
-		if (state.value.includes("done")) return null;
+		if (isDone) return null;
 		return html`
       <div class=${styles.formWrapper}>
         <label for="address" class=${styles.label}>Wallet Address</label>
@@ -131,16 +159,9 @@ export function FaucetForm({ providerUrl, captchaKey }) {
           <span>Test Fuel network</span>. This faucet sends fake Ether assets to
           the provided wallet address.
         </p>
-        <${Captcha}
-          captchaKey=${captchaKey}
-          isHidden=${state.value.includes("done")}
-        />
+        <${Captcha} captchaKey=${captchaKey} isHidden=${isDone} />
         <${AlertError} error=${error.value?.toString()} />
-        <div
-          class=${`text-center mt-6 ${
-						state.value.includes("done") && "hidden"
-					}`}
-        >
+        <div class=${`text-center mt-6 ${isDone && "hidden"}`}>
           <button
             type="submit"
             class=${styles.submitButton}
@@ -166,7 +187,7 @@ export function FaucetForm({ providerUrl, captchaKey }) {
 
       ${isPowDone.value && html`<${AlertPowSuccess} />`}
       ${
-				isClaimSent.value &&
+				isClaimDone.value &&
 				html`<${AlertClaimSuccess} explorerLink=${explorerLink.value} />`
 			}
     </div>
