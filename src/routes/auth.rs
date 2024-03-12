@@ -31,7 +31,7 @@ pub async fn handler(
     let jwt_token: Option<String> = session.get("JWT_TOKEN").await.unwrap();
 
     match jwt_token {
-        Some(_) => Redirect::temporary("/").into_response(),
+        Some(_) => Redirect::temporary("/?method=auth").into_response(),
         None => Html(render_auth(clerk_pub_key.unwrap_or("".to_string()))).into_response(),
     }
 }

@@ -2,6 +2,8 @@ const worker = new Worker(new URL("/static/worker.js", import.meta.url));
 import mitt from "mitt";
 
 const emitter = mitt();
+const query = new URLSearchParams(document.location.search);
+const method = query.get("method") ?? "pow";
 
 export class PoW {
 	constructor() {
@@ -10,6 +12,10 @@ export class PoW {
 		this.providerUrl = null;
 		this.address = null;
 		this.hash = null;
+	}
+
+	get isUsing() {
+		return method === "pow";
 	}
 
 	setWorking(working) {

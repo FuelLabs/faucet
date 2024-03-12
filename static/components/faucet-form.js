@@ -34,7 +34,10 @@ export function FaucetForm({ providerUrl, captchaKey }) {
 	const state = useSignal(null);
 	const error = useSignal(null);
 	const address = useSignal(queryAddress);
-	const submitText = useSignal("Start PoW");
+	const submitText = useSignal(
+		pow.isUsing ? "Start PoW" : "Give me test Ether",
+	);
+
 	const explorerLink = useSignal(null);
 	const isSubmitDisabled = useComputed(
 		() =>
@@ -50,7 +53,11 @@ export function FaucetForm({ providerUrl, captchaKey }) {
 
 	async function onSubmit(e) {
 		e.preventDefault();
-		await pow.toggle();
+		if (pow.isUsing) {
+			await pow.toggle();
+		} else {
+			//
+		}
 	}
 
 	function onInput(e) {

@@ -1,9 +1,10 @@
 use crate::SharedConfig;
 use axum::{
-    extract::Extension,
+    extract::{Extension, Query},
     response::{Html, IntoResponse, Redirect},
 };
 use handlebars::Handlebars;
+use serde::Deserialize;
 use std::{
     collections::BTreeMap,
     time::{SystemTime, UNIX_EPOCH},
@@ -38,9 +39,15 @@ fn render_main(
     handlebars.render("index", &data).unwrap()
 }
 
+#[derive(Deserialize, Debug)]
+pub struct Method {
+    pub method: Option<String>,
+}
+
 pub async fn handler(
     Extension(config): Extension<SharedConfig>,
     session: Session,
+    method: Query<Method>,
 ) -> impl IntoResponse {
     let public_node_url = config.public_node_url.clone();
     let captcha_key = config.captcha_key.clone();
@@ -49,6 +56,13 @@ pub async fn handler(
 
     match jwt_token {
         Some(_) => Html(render_main(public_node_url, captcha_key, clerk_pub_key)).into_response(),
-        None => Redirect::temporary("/auth").into_response(),
+        None => {
+            let value = method.method.as_ref();
+            if value.unwrap() == "auth" {
+                Redirect::temporary("/auth").into_response()
+            } else {
+                Html(render_main(public_node_url, captcha_key, clerk_pub_key)).into_response()
+            }
+        }
     }
 }

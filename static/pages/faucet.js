@@ -4,27 +4,32 @@ import { Component, render } from "preact";
 import { FaucetForm } from "components/faucet-form";
 import { FuelLogo } from "components/fuel-logo";
 
-window.addEventListener("load", async () => {
-	await Clerk.load();
+const query = new URLSearchParams(document.location.search);
+const method = query.get("method") ?? "pow";
 
-	if (Clerk.user) {
-		const userBtn = document.querySelector("#clerk-user");
-		Clerk.mountUserButton(userBtn);
-	}
+if (method === "auth") {
+	window.addEventListener("load", async () => {
+		await Clerk.load();
 
-	Clerk.addListener(async (resources) => {
-		if (!resources.session) {
-			const res = await fetch("/api/remove-session", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-			});
-			await res.json();
-			window.location.reload();
+		if (Clerk.user) {
+			const userBtn = document.querySelector("#clerk-user");
+			Clerk.mountUserButton(userBtn);
 		}
+
+		Clerk.addListener(async (resources) => {
+			if (!resources.session) {
+				const res = await fetch("/api/remove-session", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+				});
+				await res.json();
+				window.location.reload();
+			}
+		});
 	});
-});
+}
 
 class App extends Component {
 	render({ publicNodeUrl, captchaKey }) {
