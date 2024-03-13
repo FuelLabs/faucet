@@ -1,6 +1,6 @@
 import Clerk from "@clerk/clerk-js";
 
-type DispenseMethod = "auth";
+type DispenseMethod = "auth" | "pow";
 export type DispenseInput = {
 	salt?: string;
 	nonce?: string;
@@ -23,6 +23,54 @@ export async function dispense(payload: DispenseInput, method: DispenseMethod) {
 		body: JSON.stringify(payload),
 	});
 	return response.json() as Promise<DispenseResponse>;
+}
+
+type CreateSessionInput = {
+	address?: string | null;
+};
+type CreateSessionResponse = {
+	status: string;
+	salt: string;
+	difficulty: number;
+	error?: string;
+};
+
+export async function createSession(payload: CreateSessionInput) {
+	if (!payload.address) {
+		throw new Error("No address provided");
+	}
+
+	const response = await fetch("/api/session", {
+		method: "POST",
+		headers: {
+			Accept: "application/json",
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify(payload),
+	});
+
+	return response.json() as Promise<CreateSessionResponse>;
+}
+
+type GetSessionInput = {
+	salt: string;
+};
+type GetSessionResponse = {
+	address: string;
+	error?: string;
+};
+
+export async function getSession(payload: GetSessionInput) {
+	const response = await fetch("/api/session", {
+		method: "GET",
+		headers: {
+			Accept: "application/json",
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify(payload),
+	});
+
+	return response.json() as Promise<GetSessionResponse>;
 }
 
 type RemoveSessionResponse = {

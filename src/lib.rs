@@ -2,6 +2,7 @@ use crate::{
     config::Config,
     constants::{MAX_CONCURRENT_REQUESTS, WALLET_SECRET_DEV_KEY},
     dispense_tracker::DispenseTracker,
+    session::SessionMap,
 };
 use axum::{
     error_handling::HandleErrorLayer,
@@ -19,7 +20,9 @@ use fuels_core::types::node_info::NodeInfo;
 use fuels_core::types::transaction_builders::NetworkInfo;
 use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
+use session::Salt;
 use std::{
+    collections::HashMap,
     net::SocketAddr,
     sync::{Arc, Mutex},
 };
@@ -37,6 +40,7 @@ use tracing::info;
 pub mod clerk;
 pub mod config;
 pub mod models;
+pub mod session;
 
 mod constants;
 mod dispense_tracker;
@@ -94,6 +98,7 @@ pub type SharedWallet = Arc<WalletUnlocked>;
 pub type SharedConfig = Arc<Config>;
 pub type SharedNetworkConfig = Arc<NetworkConfig>;
 pub type SharedDispenseTracker = Arc<Mutex<DispenseTracker>>;
+pub type SharedSessions = Arc<tokio::sync::Mutex<HashMap<Salt, Address>>>;
 
 pub async fn start_server(
     service_config: Config,
@@ -162,6 +167,9 @@ pub async fn start_server(
         .layer(session_layer.clone())
         .into_inner();
 
+    let pow_difficulty = service_config.pow_difficulty;
+    let sessions: SharedSessions = Arc::new(tokio::sync::Mutex::new(SessionMap::new()));
+
     let api_routes = Router::new()
         .route(
             "/dispense",
@@ -176,7 +184,23 @@ pub async fn start_server(
             ),
         )
         .route("/session/validate", post(routes::session_validate::handler))
-        .route("/session/remove", post(routes::session_remove::handler));
+        .route("/session/remove", post(routes::session_remove::handler))
+        .route("/session", get(routes::session_get::handler))
+        .layer(Extension(sessions.clone()))
+        .route("/session", post(routes::session_create::handler))
+        .layer(
+            ServiceBuilder::new()
+                // Handle errors from middleware
+                .layer(HandleErrorLayer::new(handle_error))
+                .load_shed()
+                .concurrency_limit(MAX_CONCURRENT_REQUESTS)
+                .timeout(NumericalStdDuration::std_seconds(60))
+                .layer(TraceLayer::new_for_http())
+                .layer(Extension(sessions.clone()))
+                .layer(Extension(Arc::new(pow_difficulty)))
+                .layer(Extension(Arc::new(service_config.clone())))
+                .into_inner(),
+        );
 
     // setup routes
     let app = Router::new()

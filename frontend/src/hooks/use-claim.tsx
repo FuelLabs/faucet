@@ -17,10 +17,11 @@ export function useClaim(providerUrl: string) {
 	const address = useSignal<string | null>(queryAddress);
 	const error = useSignal<any>(null);
 	const state = useSignal<string>("loading");
-	const method = useSignal<"auth" | null>(null);
+	const method = useSignal<"auth" | "pow" | null>(null);
 	const isDone = state.value?.includes("done");
 	const isSignedIn = useSignal(false);
 	const isLoading = useComputed(() => state.value === "loading");
+	const isWorking = useComputed(() => state.value === "working");
 	const isDisabled = useComputed(
 		() => !address.value?.length || state.value === "loading" || isDone,
 	);
@@ -63,6 +64,10 @@ export function useClaim(providerUrl: string) {
 		});
 	}
 
+	async function submitUsingPow() {
+		await claim.withPow();
+	}
+
 	async function onSubmit(e: any) {
 		e.preventDefault();
 
@@ -70,9 +75,14 @@ export function useClaim(providerUrl: string) {
 			await submitUsingAuth();
 			return;
 		}
+
+		if (method.value === "pow") {
+			await submitUsingPow();
+			return;
+		}
 	}
 
-	function setMethod(value: "auth" | null) {
+	function setMethod(value: "auth" | "pow" | null) {
 		return () => {
 			method.value = value;
 		};
@@ -82,6 +92,11 @@ export function useClaim(providerUrl: string) {
 		address.value = e.target.value;
 	}
 
+	function submitPowText() {
+		if (isLoading.value) return "Loading";
+		if (isWorking.value) return "Stop PoW";
+		return "Claim with Pow";
+	}
 	function submitAuthText() {
 		if (isLoading.value) return "Loading";
 		return "Claim with Auth";
@@ -90,8 +105,16 @@ export function useClaim(providerUrl: string) {
 	useEffect(() => {
 		claim.setProviderUrl(providerUrl);
 		claim.setAddress(address.value);
+		claim.setup();
 
 		const subs = [
+			claim.onStart(() => {
+				state.value = "working";
+				error.value = null;
+			}),
+			claim.onStop(() => {
+				state.value = "idle";
+			}),
 			claim.onError((err) => {
 				error.value = err.message;
 				state.value = "error";
@@ -142,10 +165,12 @@ export function useClaim(providerUrl: string) {
 		isSignedIn: isSignedIn.value,
 		isDisabled: isDisabled.value,
 		isLoading: isLoading.value,
+		isWorking: isWorking.value,
 		isDone,
 		onSubmit,
 		onInput,
 		setMethod,
+		submitPowText,
 		submitAuthText,
 	};
 }
