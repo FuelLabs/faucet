@@ -1,14 +1,13 @@
 use crate::SharedConfig;
 use axum::{
     extract::Extension,
-    response::{Html, IntoResponse, Redirect},
+    response::{Html, IntoResponse},
 };
 use handlebars::Handlebars;
 use std::{
     collections::BTreeMap,
     time::{SystemTime, UNIX_EPOCH},
 };
-use tower_sessions::Session;
 
 lazy_static::lazy_static! {
     static ref START_TIME: u64 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
@@ -29,18 +28,8 @@ fn render_main(public_node_url: String, clerk_pub_key: String) -> String {
     handlebars.render("index", &data).unwrap()
 }
 
-pub async fn handler(
-    Extension(config): Extension<SharedConfig>,
-    session: Session,
-) -> impl IntoResponse {
+pub async fn handler(Extension(config): Extension<SharedConfig>) -> impl IntoResponse {
     let public_node_url = config.public_node_url.clone();
     let clerk_pub_key = config.clerk_pub_key.clone().unwrap_or("".to_string());
-    // let jwt_token: Option<String> = session.get("JWT_TOKEN").await.unwrap();
-
-    let redirect_to_auth = || Redirect::temporary("/auth").into_response();
-    // if jwt_token.is_some() {
-    //     return html_response();
-    // }
-
     Html(render_main(public_node_url, clerk_pub_key)).into_response()
 }

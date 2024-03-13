@@ -6,7 +6,6 @@ use clerk_rs::{
     ClerkConfiguration,
 };
 use secrecy::ExposeSecret;
-use serde::Deserializer;
 use serde_json::json;
 
 #[derive(Debug)]
@@ -29,10 +28,6 @@ impl std::fmt::Display for ClerkError {
 }
 
 impl std::error::Error for ClerkError {}
-
-struct UserPrivateMetadata {
-    claim_value: String,
-}
 
 pub struct ClerkResponse {
     pub user: models::User,
