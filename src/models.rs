@@ -9,6 +9,8 @@ pub struct DispenseInfoResponse {
 
 #[derive(Deserialize, Debug)]
 pub struct DispenseInput {
+    pub salt: Option<String>,
+    pub nonce: Option<String>,
     pub address: Option<String>,
 }
 
@@ -20,6 +22,24 @@ pub struct DispenseResponse {
 
 #[derive(Debug)]
 pub struct DispenseError {
+    pub status: StatusCode,
+    pub error: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CreateSessionInput {
+    pub address: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CreateSessionResponse {
+    pub status: String,
+    pub salt: String,
+    pub difficulty: u8,
+}
+
+#[derive(Debug)]
+pub struct CreateSessionError {
     pub status: StatusCode,
     pub error: String,
 }

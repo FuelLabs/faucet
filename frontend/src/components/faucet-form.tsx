@@ -48,14 +48,17 @@ export function FaucetForm({ providerUrl }: { providerUrl: string }) {
 		method,
 		isSignedIn,
 		isDisabled,
+		isWorking,
 		isLoading,
 		isDone,
 		onSubmit,
 		onInput,
 		setMethod,
+		submitPowText,
 		submitAuthText,
 	} = useClaim(providerUrl);
 
+	const onSubmitPow = setMethod("pow");
 	const onSubmitAuth = setMethod("auth");
 
 	function getForm() {
@@ -111,12 +114,27 @@ export function FaucetForm({ providerUrl }: { providerUrl: string }) {
 					</Submit>
 					<Submit
 						disabled={isDisabled}
+						onClick={onSubmitPow}
+						isHidden={isSignedIn}
+					>
+						{submitPowText()}
+					</Submit>
+					<Submit
+						disabled={isDisabled}
 						onClick={onSubmitAuth}
 						isHidden={isSignedIn}
 					>
 						{submitAuthText()}
 					</Submit>
 				</div>
+				{isWorking && (
+					<div class="w-full flex items-center justify-center mt-2 text-sm text-gray-500">
+						<span class="loader w-4 h-4" />
+						<span class="ms-2">
+							Please, waiting until Proof of Work get finished!
+						</span>
+					</div>
+				)}
 			</form>
 			{isDone && <AlertSuccess />}
 		</div>

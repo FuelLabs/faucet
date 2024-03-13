@@ -21,6 +21,7 @@ The faucet makes use of environment variables for configuration.
 | SERVICE_PORT         | The port the service will listen for http connections on.                                       |
 | DISPENSE_AMOUNT      | Dispense amount on each faucet                                                                  |
 | MIN_GAS_PRICE        | The minimum gas price to use in each transfer                                                   |
+| POW_DIFFICULTY       | Number of leading zeroes that a valid proof of work hash must have                              |
 
 ## Build and Run
 
