@@ -73,12 +73,7 @@ export class PoW {
 		emitter.emit("start");
 		const payload = {
 			address: this.address,
-			captcha: "",
 		};
-
-		// if (hasCaptcha()) {
-		// 	data.captcha = form["g-recaptcha-response"].value;
-		// }
 
 		try {
 			const data = await getSession(payload);

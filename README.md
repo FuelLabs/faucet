@@ -3,8 +3,7 @@
 [![build](https://github.com/FuelLabs/faucet/actions/workflows/ci.yml/badge.svg)](https://github.com/FuelLabs/faucet/actions/workflows/ci.yml)
 [![discord](https://img.shields.io/badge/chat%20on-discord-orange?&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/xfpK4Pe)
 
-A simple faucet app for dispensing tokens on a fuel network. It uses Google captcha for spam resistance
-without requiring any social media based identification.
+A simple faucet app for dispensing tokens on a fuel network.
 
 ## Configuration
 
@@ -14,8 +13,6 @@ The faucet makes use of environment variables for configuration.
 | -------------------- | ----------------------------------------------------------------------------------------------- |
 | RUST_LOG             | EnvFilter configuration for adjusting logging granularity.                                      |
 | HUMAN_LOGGING        | If false, logs will be output as machine readable JSON.                                         |
-| CAPTCHA_SECRET       | The secret key used for enabling Google captcha authentication.                                 |
-| CAPTCHA_KEY          | The website key used for enabling Google captcha authentication.                                |
 | CLERK_PUB_KEY        | The public key used for enabling clerk authentication.                                          |
 | CLERK_SECRET_KEY     | The secret key used for enabling clerk authentication.                                          |
 | WALLET_SECRET_KEY    | A hex formatted string of the wallet private key that owns some tokens.                         |

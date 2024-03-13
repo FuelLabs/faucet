@@ -1,10 +1,9 @@
-pub mod auth;
-pub mod create_session;
 pub mod dispense;
 pub mod favicon;
-pub mod get_session;
 pub mod health;
 pub mod main;
-pub mod remove_session;
+pub mod session_create;
+pub mod session_get;
+pub mod session_remove;
+pub mod session_validate;
 pub mod static_files;
-pub mod validate_session;

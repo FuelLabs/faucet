@@ -37,13 +37,13 @@ use tower_http::{
 use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
 use tracing::info;
 
+pub mod clerk;
 pub mod config;
 pub mod models;
 pub mod session;
 
 mod constants;
 mod dispense_tracker;
-mod recaptcha;
 mod routes;
 
 pub use dispense_tracker::{Clock, TokioTime};
@@ -183,17 +183,11 @@ pub async fn start_server(
                     .into_inner(),
             ),
         )
-        .route(
-            "/session/validate",
-            post(routes::validate_session::handler).route_layer(web_layer.clone()),
-        )
-        .route(
-            "/session/remove",
-            post(routes::remove_session::handler).route_layer(session_layer.clone()),
-        )
-        .route("/session", get(routes::get_session::handler))
+        .route("/session/validate", post(routes::session_validate::handler))
+        .route("/session/remove", post(routes::session_remove::handler))
+        .route("/session", get(routes::session_get::handler))
         .layer(Extension(sessions.clone()))
-        .route("/session", post(routes::create_session::handler))
+        .route("/session", post(routes::session_create::handler))
         .layer(
             ServiceBuilder::new()
                 // Handle errors from middleware
@@ -211,15 +205,12 @@ pub async fn start_server(
     // setup routes
     let app = Router::new()
         .nest("/api", api_routes)
+        .layer(session_layer)
         .nest("/static", routes::static_files::handler("static"))
         .route("/favicon.ico", get(routes::favicon::handler))
         .route(
             "/",
             get(routes::main::handler).route_layer(web_layer.clone()),
-        )
-        .route(
-            "/auth",
-            get(routes::auth::handler).route_layer(web_layer.clone()),
         )
         .route("/dispense", get(routes::dispense::info_handler))
         .route("/health", get(routes::health::handler))

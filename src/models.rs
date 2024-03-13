@@ -11,7 +11,6 @@ pub struct DispenseInfoResponse {
 pub struct DispenseInput {
     pub salt: Option<String>,
     pub nonce: Option<String>,
-    pub captcha: Option<String>,
     pub address: Option<String>,
 }
 
@@ -30,7 +29,6 @@ pub struct DispenseError {
 #[derive(Deserialize, Debug)]
 pub struct CreateSessionInput {
     pub address: String,
-    pub captcha: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

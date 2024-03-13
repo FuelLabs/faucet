@@ -1,5 +1,5 @@
 export async function dispense(payload, method) {
-	const res = await fetch(`/api/dispense?method=${method}`, {
+	const response = await fetch(`/api/dispense?method=${method}`, {
 		method: "POST",
 		headers: {
 			Accept: "application/json",
@@ -7,8 +7,7 @@ export async function dispense(payload, method) {
 		},
 		body: JSON.stringify(payload),
 	});
-
-	return res.json();
+	return response.json();
 }
 
 export async function getSession(payload) {
@@ -21,5 +20,27 @@ export async function getSession(payload) {
 		body: JSON.stringify(payload),
 	});
 
+	return response.json();
+}
+
+export async function validateSession(sessions) {
+	const response = await fetch("/api/session/validate", {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({ value: sessions[0]?.id }),
+	});
+	return response.json();
+}
+
+export async function removeSession() {
+	const response = await fetch("/api/session/remove", {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({}),
+	});
 	return response.json();
 }

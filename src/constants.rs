@@ -2,8 +2,6 @@ use fuels_core::types::AssetId;
 
 pub const LOG_FILTER: &str = "RUST_LOG";
 pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
-pub const CAPTCHA_KEY: &str = "CAPTCHA_KEY";
-pub const CAPTCHA_SECRET: &str = "CAPTCHA_SECRET";
 pub const WALLET_SECRET_KEY: &str = "WALLET_SECRET_KEY";
 pub const CLERK_PUB_KEY: &str = "CLERK_PUB_KEY";
 pub const CLERK_SECRET_KEY: &str = "CLERK_SECRET_KEY";

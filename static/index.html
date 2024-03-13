@@ -8,7 +8,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet" />
-    <script src="https://www.google.com/recaptcha/api.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/static/css/index.css" />
   </head>
@@ -28,11 +27,10 @@
           "lib/html": "/static/lib/html.js",
           "lib/pow": "/static/lib/pow.js",
           "lib/claim": "/static/lib/claim.js",
+          "hooks/use-claim": "/static/hooks/use-claim.js",
           "components/faucet-form": "/static/components/faucet-form.js",
           "components/fuel-logo": "/static/components/fuel-logo.js",
-          "components/captcha": "/static/components/captcha.js",
-          "pages/faucet": "/static/pages/faucet.js",
-          "pages/auth": "/static/pages/auth.js"
+          "components/app": "/static/components/app.js"
         }
       }
     </script>
@@ -44,11 +42,8 @@
       type="text/javascript"
     ></script>
     <script type="module">
-      import render from "/static/pages/{{ page }}.js";
-      render({
-        publicNodeUrl: "{{ public_node_url }}",
-        captchaKey: "{{ captcha_key }}",
-      });
+      import render from "components/app";
+      render({ publicNodeUrl: "{{ public_node_url }}" });
     </script>
   </body>
 </html>

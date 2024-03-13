@@ -1,8 +1,7 @@
 use crate::{
     models::{CreateSessionError, CreateSessionInput, CreateSessionResponse},
-    recaptcha,
     session::Salt,
-    SharedConfig, SharedSessions,
+    SharedSessions,
 };
 use axum::{
     http::StatusCode,
@@ -11,7 +10,6 @@ use axum::{
 };
 use fuel_types::Address;
 use fuels_core::types::bech32::Bech32Address;
-use secrecy::ExposeSecret;
 use serde_json::json;
 use std::{str::FromStr, sync::Arc};
 
@@ -36,7 +34,6 @@ impl IntoResponse for CreateSessionError {
 pub async fn handler(
     Extension(sessions): Extension<SharedSessions>,
     Extension(pow_difficulty): Extension<Arc<u8>>,
-    Extension(config): Extension<SharedConfig>,
     Json(input): Json<CreateSessionInput>,
 ) -> Result<CreateSessionResponse, CreateSessionError> {
     // parse deposit address
@@ -50,19 +47,6 @@ pub async fn handler(
             error: "invalid address".to_string(),
         });
     }?;
-
-    // verify captcha
-    if let Some(s) = config.captcha_secret.clone() {
-        recaptcha::verify(s.expose_secret(), input.captcha.as_str(), None)
-            .await
-            .map_err(|e| {
-                tracing::error!("{}", e);
-                CreateSessionError {
-                    error: "captcha failed".to_string(),
-                    status: StatusCode::UNAUTHORIZED,
-                }
-            })?;
-    }
 
     let mut map = sessions.lock().await;
     let salt = Salt::random();

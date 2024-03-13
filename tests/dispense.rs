@@ -212,7 +212,6 @@ async fn _dispense_sends_coins_to_valid_address(
         .post(format!("http://{addr}/api/session"))
         .json(&json!({
             "address": recipient_address_str,
-            "captcha": ""
         }))
         .send()
         .await
@@ -270,7 +269,6 @@ async fn many_concurrent_requests() {
                 .post(format!("http://{addr}/api/session"))
                 .json(&json!({
                     "address": recipient,
-                    "captcha": ""
                 }))
                 .send()
                 .await
@@ -328,7 +326,6 @@ async fn dispense_once_per_day() {
         .post(format!("http://{addr}/api/session"))
         .json(&json!({
             "address": recipient_address_str,
-            "captcha": ""
         }))
         .send()
         .await

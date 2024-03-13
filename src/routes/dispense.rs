@@ -1,5 +1,5 @@
 use crate::{
-    models::*, recaptcha, session::Salt, CoinOutput, SharedConfig, SharedDispenseTracker,
+    clerk::ClerkHandler, models::*, session::Salt, CoinOutput, SharedConfig, SharedDispenseTracker,
     SharedFaucetState, SharedNetworkConfig, SharedSessions, SharedWallet,
 };
 use axum::{
@@ -25,12 +25,12 @@ use fuels_core::types::{
 use fuels_core::types::{input::Input, transaction_builders::ScriptTransactionBuilder};
 use hex::FromHexError;
 use num_bigint::BigUint;
-use secrecy::ExposeSecret;
 use serde::Deserialize;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::time::Duration;
 use std::{str::FromStr, sync::Arc};
+use tower_sessions::Session;
 use tracing::{error, info};
 
 impl IntoResponse for DispenseResponse {
@@ -155,6 +155,7 @@ pub async fn tokens_handler(
     Extension(sessions): Extension<SharedSessions>,
     Extension(dispense_tracker): Extension<SharedDispenseTracker>,
     method: Query<Method>,
+    session: Session,
     Json(input): Json<DispenseInput>,
 ) -> Result<DispenseResponse, DispenseError> {
     if method.method.as_deref() == Some("pow") {
@@ -177,6 +178,7 @@ pub async fn tokens_handler(
             Extension(client),
             Extension(network_config),
             Extension(dispense_tracker),
+            session,
             Json(input),
         )
         .await
@@ -198,10 +200,39 @@ async fn dispense_auth(
     Extension(client): Extension<Arc<FuelClient>>,
     Extension(network_config): Extension<SharedNetworkConfig>,
     Extension(dispense_tracker): Extension<SharedDispenseTracker>,
+    session: Session,
     Json(input): Json<DispenseInput>,
 ) -> Result<DispenseResponse, DispenseError> {
-    let input_captcha = get_input(input.captcha.clone(), "captcha")?;
     let input_address = get_input(input.address.clone(), "address")?;
+    let clerk = ClerkHandler::new(&config);
+    let jwt_token: Option<String> = session.get("JWT_TOKEN").await.unwrap();
+    let user_id = clerk
+        .user_id_from_session(jwt_token.clone().unwrap().as_str())
+        .await
+        .map_err(|e| {
+            error(
+                format!("Failed to get user id: {e}"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?;
+
+    let has_claimed_res = clerk.check_user_claim(user_id.clone().as_str()).await;
+    let has_claimed = match has_claimed_res {
+        Ok(claimed) => claimed,
+        Err(e) => {
+            return Err(error(
+                format!("Failed to check user claim: {e}"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            ))
+        }
+    };
+
+    if has_claimed {
+        return Err(error(
+            "User has already claimed tokens".to_string(),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
 
     // parse deposit address
     let address = if let Ok(address) = Address::from_str(input_address.as_str()) {
@@ -214,19 +245,6 @@ async fn dispense_auth(
             StatusCode::BAD_REQUEST,
         ));
     }?;
-
-    // verify captcha
-    if let Some(s) = config.captcha_secret.clone() {
-        recaptcha::verify(s.expose_secret(), input_captcha.as_str(), None)
-            .await
-            .map_err(|e| {
-                tracing::error!("{}", e);
-                DispenseError {
-                    error: "captcha failed".to_string(),
-                    status: StatusCode::UNAUTHORIZED,
-                }
-            })?;
-    }
 
     check_and_mark_dispense_limit(&dispense_tracker, address, config.dispense_limit_interval)?;
     let cleanup = || {
@@ -336,6 +354,19 @@ async fn dispense_auth(
     );
 
     dispense_tracker.lock().unwrap().track(address);
+
+    clerk
+        .update_user_claim(
+            user_id.clone().as_str(),
+            format!("{}", config.dispense_amount).as_str(),
+        )
+        .await
+        .map_err(|e| {
+            error(
+                format!("Failed to update user claim: {e}"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?;
 
     Ok(DispenseResponse {
         status: "Success".to_string(),
