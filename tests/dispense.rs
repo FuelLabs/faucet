@@ -236,7 +236,6 @@ async fn many_concurrent_requests() {
 async fn dispense_once_per_day() {
     let mut rng = StdRng::seed_from_u64(42);
     let recipient_address: Address = rng.gen();
-    let recipient_address_str = format!("{}", &recipient_address);
     let context = TestContext::new(rng).await;
     let addr = context.addr;
 
