@@ -337,10 +337,7 @@ async fn dispense_auth(
     dispense_tracker.lock().unwrap().track(address);
 
     clerk
-        .update_user_claim(
-            user_id.clone().as_str(),
-            format!("{}", config.dispense_amount).as_str(),
-        )
+        .update_user_claim(user_id.clone().as_str())
         .await
         .map_err(|e| {
             error(

@@ -234,8 +234,7 @@ async fn many_concurrent_requests() {
 
 #[tokio::test]
 async fn dispense_once_per_day() {
-    let mut rng = StdRng::seed_from_u64(42);
-    let recipient_address: Address = rng.gen();
+    let rng = StdRng::seed_from_u64(42);
     let context = TestContext::new(rng).await;
     let addr = context.addr;
 

@@ -107,7 +107,7 @@ export function FaucetForm({ providerUrl }: { providerUrl: string }) {
 						onClick={onSubmit}
 						isHidden={!isSignedIn}
 					>
-						{isLoading ? "Loading..." : "Confirm Claim"}
+						{isLoading ? "Loading..." : "Send me test ETH"}
 					</Submit>
 					<Submit
 						disabled={isDisabled}

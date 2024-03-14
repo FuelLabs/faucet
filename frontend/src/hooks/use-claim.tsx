@@ -84,7 +84,7 @@ export function useClaim(providerUrl: string) {
 
 	function submitAuthText() {
 		if (isLoading.value) return "Loading";
-		return "Claim with Auth";
+		return "Login with to request faucet ETH";
 	}
 
 	useEffect(() => {

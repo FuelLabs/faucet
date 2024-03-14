@@ -1,3 +1,5 @@
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
 use crate::config::Config;
 use clerk_rs::{
     apis::{sessions_api, users_api},
@@ -36,6 +38,7 @@ pub struct ClerkResponse {
 
 pub struct ClerkHandler {
     pub client: Clerk,
+    pub dispense_limit_interval: u64,
 }
 
 impl ClerkHandler {
@@ -48,20 +51,22 @@ impl ClerkHandler {
         let clerk_key = Some(clerk_secret_key.expose_secret().clone());
         let clerk_config = ClerkConfiguration::new(None, None, clerk_key, None);
         let client = Clerk::new(clerk_config);
-        ClerkHandler { client }
+        ClerkHandler {
+            client,
+            dispense_limit_interval: config.dispense_limit_interval,
+        }
     }
 
-    pub async fn update_user_claim(
-        &self,
-        user_id: &str,
-        claim_value: &str,
-    ) -> Result<models::User, ClerkError> {
+    pub async fn update_user_claim(&self, user_id: &str) -> Result<models::User, ClerkError> {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
         let user = self.get_user(user_id).await?;
         let update_request = Some(UpdateUserMetadataRequest {
             public_metadata: None,
             unsafe_metadata: None,
             private_metadata: Some(json!({
-                "claim_value": claim_value
+                "claim_timestamp":  timestamp.as_secs().to_string(),
             })),
         });
 
@@ -79,16 +84,26 @@ impl ClerkHandler {
         Ok(user)
     }
 
+    pub fn check_dispense_interval(&self, seconds_str: &str) -> bool {
+        if let Ok(seconds) = u64::from_str_radix(seconds_str, 10) {
+            let given_time = UNIX_EPOCH + Duration::from_secs(seconds);
+
+            if let Ok(duration_since_given) = SystemTime::now().duration_since(given_time) {
+                let diff_seconds = duration_since_given.as_secs();
+                return diff_seconds >= self.dispense_limit_interval
+                    && diff_seconds < self.dispense_limit_interval * 2;
+            }
+        }
+        false
+    }
+
     pub async fn check_user_claim(&self, user_id: &str) -> Result<bool, ClerkError> {
         let user = self.get_user(user_id).await?;
         match user.private_metadata {
             Some(metadata) => {
                 let value = metadata.unwrap();
-                if value["claim_value"].is_null() {
-                    Ok(false)
-                } else {
-                    Ok(true)
-                }
+                let claim_timestamp = value["claim_timestamp"].as_str().unwrap_or("0");
+                return Ok(self.check_dispense_interval(claim_timestamp));
             }
             None => Ok(false),
         }

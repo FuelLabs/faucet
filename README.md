@@ -30,8 +30,14 @@ To run locally, assuming environment variables have already been set:
 cargo run
 ```
 
-You will need a fuel node running. You can run one with the default configuration to make the faucet work:
+## Building Frontend
+
+To build the frontend code, you can run the following commands:
 
 ```sh
-fuel-core run --chain ./chain_config.json --db-type in-memory
+cd frontend
+bun install
+bun run build
 ```
+
+For development you can run `bun run build:watch`.
