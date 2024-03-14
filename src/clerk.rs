@@ -103,7 +103,7 @@ impl ClerkHandler {
             Some(metadata) => {
                 let value = metadata.unwrap();
                 let claim_timestamp = value["claim_timestamp"].as_str().unwrap_or("0");
-                return Ok(self.check_dispense_interval(claim_timestamp));
+                Ok(self.check_dispense_interval(claim_timestamp))
             }
             None => Ok(false),
         }
