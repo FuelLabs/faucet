@@ -85,7 +85,7 @@ impl ClerkHandler {
     }
 
     pub fn check_dispense_interval(&self, seconds_str: &str) -> bool {
-        if let Ok(seconds) = u64::from_str_radix(seconds_str, 10) {
+        if let Ok(seconds) = seconds_str.parse::<u64>() {
             let given_time = UNIX_EPOCH + Duration::from_secs(seconds);
 
             if let Ok(duration_since_given) = SystemTime::now().duration_since(given_time) {
