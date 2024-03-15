@@ -135,6 +135,13 @@ fn check_and_mark_dispense_limit(
         ));
     }
 
+    if tracker.is_in_progress(&address) {
+        return Err(error(
+            "Account is already in the process of receiving assets".to_string(),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
     tracker.mark_in_progress(address);
     Ok(())
 }
@@ -247,7 +254,7 @@ pub async fn dispense_tokens(
 
     let provider = wallet.provider().expect("client provider");
 
-    let mut  tx_id = None;
+    let mut tx_id = None;
     for _ in 0..5 {
         let mut guard = state.lock().await;
         let coin_output = if let Some(previous_coin_output) = &guard.last_output {
@@ -311,7 +318,10 @@ pub async fn dispense_tokens(
         .and_then(|r| {
             r.map_err(|e| {
                 error(
-                    format!("Failed to submit transaction for address: {address:X} with error: {}", e),
+                    format!(
+                        "Failed to submit transaction for address: {address:X} with error: {}",
+                        e
+                    ),
                     StatusCode::INTERNAL_SERVER_ERROR,
                 )
             })
@@ -341,7 +351,7 @@ pub async fn dispense_tokens(
             StatusCode::INTERNAL_SERVER_ERROR,
         ));
     };
-    
+
     submit_tx_with_timeout(&client, &tx_id, config.timeout)
         .await
         .map_err(|e| {
@@ -354,7 +364,9 @@ pub async fn dispense_tokens(
         config.dispense_amount, &address
     );
 
-    dispense_tracker.lock().unwrap().track(address);
+    let mut tracker = dispense_tracker.lock().unwrap();
+    tracker.track(address);
+    tracker.remove_in_progress(&address);
 
     Ok(DispenseResponse {
         status: "Success".to_string(),

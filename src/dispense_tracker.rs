@@ -66,8 +66,6 @@ impl DispenseTracker {
     }
 
     pub fn track(&mut self, address: Address) {
-        self.in_progress.remove(&address);
-
         let timestamp = self.clock.now();
         self.tracked.insert(address, timestamp);
         self.queue.push(Entry { address, timestamp });
@@ -95,6 +93,10 @@ impl DispenseTracker {
     }
 
     pub fn has_tracked(&self, address: &Address) -> bool {
-        self.tracked.get(address).is_some() || self.in_progress.contains(address)
+        self.tracked.get(address).is_some()
+    }
+
+    pub fn is_in_progress(&self, address: &Address) -> bool {
+        self.in_progress.contains(address)
     }
 }
