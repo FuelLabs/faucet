@@ -1,3 +1,4 @@
+use std::fmt::{self, Display, Formatter};
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 
@@ -23,3 +24,11 @@ pub struct DispenseError {
     pub status: StatusCode,
     pub error: String,
 }
+
+impl Display for DispenseError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl std::error::Error for DispenseError {}

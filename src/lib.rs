@@ -42,7 +42,8 @@ mod constants;
 mod dispense_tracker;
 mod routes;
 
-pub use dispense_tracker::{Clock, TokioTime};
+pub use dispense_tracker::{Clock, StdTime};
+pub use routes::THE_BIGGEST_AMOUNT;
 
 // The amount to fetch the biggest input of the faucet.
 pub const THE_BIGGEST_AMOUNT: u64 = u32::MAX as u64;
