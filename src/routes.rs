@@ -245,12 +245,27 @@ pub async fn dispense_tokens(
     }
 
     check_and_mark_dispense_limit(&dispense_tracker, address, config.dispense_limit_interval)?;
-    let cleanup = || {
+
+    struct CleanUpper<Fn>(Fn)
+    where
+        Fn: FnMut();
+
+    impl<Fn> Drop for CleanUpper<Fn>
+    where
+        Fn: FnMut(),
+    {
+        fn drop(&mut self) {
+            self.0();
+        }
+    }
+
+    // We want to remove the address from `in_progress` regardless of the outcome of the transaction.
+    let _cleanup = CleanUpper(|| {
         dispense_tracker
             .lock()
             .unwrap()
             .remove_in_progress(&address);
-    };
+    });
 
     let provider = wallet.provider().expect("client provider");
 
@@ -260,12 +275,7 @@ pub async fn dispense_tokens(
         let coin_output = if let Some(previous_coin_output) = &guard.last_output {
             *previous_coin_output
         } else {
-            get_coin_output(&wallet, config.dispense_amount)
-                .await
-                .map_err(|e| {
-                    cleanup();
-                    e
-                })?
+            get_coin_output(&wallet, config.dispense_amount).await?
         };
 
         let coin_type = CoinType::Coin(Coin {
@@ -345,19 +355,13 @@ pub async fn dispense_tokens(
     }
 
     let Some(tx_id) = tx_id else {
-        cleanup();
         return Err(error(
             "Failed to submit transaction".to_string(),
             StatusCode::INTERNAL_SERVER_ERROR,
         ));
     };
 
-    submit_tx_with_timeout(&client, &tx_id, config.timeout)
-        .await
-        .map_err(|e| {
-            cleanup();
-            e
-        })?;
+    submit_tx_with_timeout(&client, &tx_id, config.timeout).await?;
 
     info!(
         "dispensed {} tokens to {:#x}",
@@ -366,7 +370,6 @@ pub async fn dispense_tokens(
 
     let mut tracker = dispense_tracker.lock().unwrap();
     tracker.track(address);
-    tracker.remove_in_progress(&address);
 
     Ok(DispenseResponse {
         status: "Success".to_string(),
