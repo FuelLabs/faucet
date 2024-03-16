@@ -135,6 +135,13 @@ fn check_and_mark_dispense_limit(
         ));
     }
 
+    if tracker.is_in_progress(&address) {
+        return Err(error(
+            "Account is already in the process of receiving assets".to_string(),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
     tracker.mark_in_progress(address);
     Ok(())
 }
@@ -238,27 +245,37 @@ pub async fn dispense_tokens(
     }
 
     check_and_mark_dispense_limit(&dispense_tracker, address, config.dispense_limit_interval)?;
-    let cleanup = || {
+
+    struct CleanUpper<Fn>(Fn)
+    where
+        Fn: FnMut();
+
+    impl<Fn> Drop for CleanUpper<Fn>
+    where
+        Fn: FnMut(),
+    {
+        fn drop(&mut self) {
+            self.0();
+        }
+    }
+
+    // We want to remove the address from `in_progress` regardless of the outcome of the transaction.
+    let _cleanup = CleanUpper(|| {
         dispense_tracker
             .lock()
             .unwrap()
             .remove_in_progress(&address);
-    };
+    });
 
     let provider = wallet.provider().expect("client provider");
-    let mut tx_id;
 
-    loop {
+    let mut tx_id = None;
+    for _ in 0..5 {
         let mut guard = state.lock().await;
         let coin_output = if let Some(previous_coin_output) = &guard.last_output {
             *previous_coin_output
         } else {
-            get_coin_output(&wallet, config.dispense_amount)
-                .await
-                .map_err(|e| {
-                    cleanup();
-                    e
-                })?
+            get_coin_output(&wallet, config.dispense_amount).await?
         };
 
         let coin_type = CoinType::Coin(Coin {
@@ -296,55 +313,63 @@ pub async fn dispense_tokens(
             .fee_checked_from_tx(&network_config.network_info.consensus_parameters)
             .expect("Should be able to calculate fee");
 
-        tx_id = script.id(network_config.network_info.consensus_parameters.chain_id);
+        let id = script.id(network_config.network_info.consensus_parameters.chain_id);
         let result = tokio::time::timeout(
             Duration::from_secs(config.timeout),
             provider.send_transaction(script),
         )
         .await
-        .map(|r| {
+        .map_err(|_| {
+            error(
+                format!("Timeout while submitting transaction for address: {address:X}"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })
+        .and_then(|r| {
             r.map_err(|e| {
                 error(
-                    format!("Failed to submit transaction: {e}"),
+                    format!(
+                        "Failed to submit transaction for address: {address:X} with error: {}",
+                        e
+                    ),
                     StatusCode::INTERNAL_SERVER_ERROR,
                 )
             })
-        })
-        .map_err(|e| {
-            error(
-                format!("Timeout while submitting transaction: {e}"),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            )
         });
 
         match result {
-            Ok(Ok(_)) => {
+            Ok(_) => {
                 guard.last_output = Some(CoinOutput {
-                    utxo_id: UtxoId::new(tx_id, 1),
+                    utxo_id: UtxoId::new(id, 1),
                     owner: coin_output.owner,
                     amount: coin_output.amount - total_fee.min_fee() - config.dispense_amount,
                 });
+                tx_id = Some(id);
                 break;
             }
-            _ => {
+            Err(e) => {
+                tracing::warn!("{}", e);
                 guard.last_output = None;
             }
         };
     }
 
-    submit_tx_with_timeout(&client, &tx_id, config.timeout)
-        .await
-        .map_err(|e| {
-            cleanup();
-            e
-        })?;
+    let Some(tx_id) = tx_id else {
+        return Err(error(
+            "Failed to submit transaction".to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ));
+    };
+
+    submit_tx_with_timeout(&client, &tx_id, config.timeout).await?;
 
     info!(
         "dispensed {} tokens to {:#x}",
         config.dispense_amount, &address
     );
 
-    dispense_tracker.lock().unwrap().track(address);
+    let mut tracker = dispense_tracker.lock().unwrap();
+    tracker.track(address);
 
     Ok(DispenseResponse {
         status: "Success".to_string(),

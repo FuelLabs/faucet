@@ -42,7 +42,7 @@ mod dispense_tracker;
 mod recaptcha;
 mod routes;
 
-pub use dispense_tracker::{Clock, TokioTime};
+pub use dispense_tracker::{Clock, StdTime};
 pub use routes::THE_BIGGEST_AMOUNT;
 
 #[derive(Debug)]
