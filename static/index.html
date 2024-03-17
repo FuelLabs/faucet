@@ -247,7 +247,6 @@
   <div class="provider-url">Node url: {{ public_node_url }}</div>
   <script>
     const faucetApp = (function () {
-      let providerUrl = "{{ public_node_url }}";
       let blockExplorer = "https://app.fuel.network/";
       let query = params = new URLSearchParams(document.location.search);
       let address = query.get('address');
