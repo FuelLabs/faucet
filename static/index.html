@@ -248,7 +248,7 @@
   <script>
     const faucetApp = (function () {
       let providerUrl = "{{ public_node_url }}";
-      let blockExplorer = "https://fuellabs.github.io/block-explorer-v2";
+      let blockExplorer = "https://app.fuel.network/";
       let query = params = new URLSearchParams(document.location.search);
       let address = query.get('address');
 
@@ -321,9 +321,7 @@
             document.getElementById("response").style.display = "block";
             document.getElementById(
               "explorer-link"
-            ).href = `${blockExplorer}/address/${address}?providerUrl=${encodeURIComponent(
-              providerUrl
-            )}`;
+            ).href = `${blockExplorer}/tx/0x${data.tx_id}`;
           } else {
             document.getElementById("response-failure").innerText = data.error;
             hideWaiting();

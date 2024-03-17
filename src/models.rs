@@ -19,6 +19,7 @@ pub struct DispenseInput {
 pub struct DispenseResponse {
     pub status: String,
     pub tokens: u64,
+    pub tx_id: String,
 }
 
 #[derive(Debug)]

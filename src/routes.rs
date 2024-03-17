@@ -374,6 +374,7 @@ pub async fn dispense_tokens(
     Ok(DispenseResponse {
         status: "Success".to_string(),
         tokens: config.dispense_amount,
+        tx_id: tx_id.to_string(),
     })
 }
 
