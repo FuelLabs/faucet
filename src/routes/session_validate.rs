@@ -32,7 +32,7 @@ pub async fn handler(
     }));
 
     session_manager
-        .insert("JWT_TOKEN", data.session.id.to_string())
+        .insert("user_id", data.user.id)
         .await
         .unwrap();
 

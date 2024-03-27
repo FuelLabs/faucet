@@ -1,6 +1,6 @@
 use crate::{
-    clerk::ClerkHandler, models::*, CoinOutput, SharedConfig, SharedDispenseTracker,
-    SharedFaucetState, SharedNetworkConfig, SharedWallet,
+    models::*, CoinOutput, SharedConfig, SharedDispenseTracker, SharedFaucetState,
+    SharedNetworkConfig, SharedWallet,
 };
 use axum::{
     extract::Extension,
@@ -27,7 +27,6 @@ use serde::Deserialize;
 use serde_json::json;
 use std::time::Duration;
 use std::{str::FromStr, sync::Arc};
-use tower_sessions::Session;
 use tracing::{error, info};
 
 impl IntoResponse for DispenseResponse {
@@ -150,7 +149,6 @@ pub async fn tokens_handler(
     Extension(client): Extension<Arc<FuelClient>>,
     Extension(network_config): Extension<SharedNetworkConfig>,
     Extension(dispense_tracker): Extension<SharedDispenseTracker>,
-    session: Session,
     Json(input): Json<DispenseInput>,
 ) -> Result<DispenseResponse, DispenseError> {
     dispense_auth(
@@ -160,7 +158,6 @@ pub async fn tokens_handler(
         Extension(client),
         Extension(network_config),
         Extension(dispense_tracker),
-        session,
         Json(input),
     )
     .await
@@ -181,39 +178,9 @@ async fn dispense_auth(
     Extension(client): Extension<Arc<FuelClient>>,
     Extension(network_config): Extension<SharedNetworkConfig>,
     Extension(dispense_tracker): Extension<SharedDispenseTracker>,
-    session: Session,
     Json(input): Json<DispenseInput>,
 ) -> Result<DispenseResponse, DispenseError> {
     let input_address = get_input(input.address.clone(), "address")?;
-    let clerk = ClerkHandler::new(&config);
-    let jwt_token: Option<String> = session.get("JWT_TOKEN").await.unwrap();
-    let user_id = clerk
-        .user_id_from_session(jwt_token.clone().unwrap().as_str())
-        .await
-        .map_err(|e| {
-            error(
-                format!("Failed to get user id: {e}"),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            )
-        })?;
-
-    let has_claimed_res = clerk.check_user_claim(user_id.clone().as_str()).await;
-    let has_claimed = match has_claimed_res {
-        Ok(claimed) => claimed,
-        Err(e) => {
-            return Err(error(
-                format!("Failed to check user claim: {e}"),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            ))
-        }
-    };
-
-    if has_claimed {
-        return Err(error(
-            "User has already claimed tokens".to_string(),
-            StatusCode::TOO_MANY_REQUESTS,
-        ));
-    }
 
     // parse deposit address
     let address = if let Ok(address) = Address::from_str(input_address.as_str()) {
@@ -335,16 +302,6 @@ async fn dispense_auth(
     );
 
     dispense_tracker.lock().unwrap().track(address);
-
-    clerk
-        .update_user_claim(user_id.clone().as_str())
-        .await
-        .map_err(|e| {
-            error(
-                format!("Failed to update user claim: {e}"),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            )
-        })?;
 
     Ok(DispenseResponse {
         status: "Success".to_string(),

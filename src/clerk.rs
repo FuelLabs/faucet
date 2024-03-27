@@ -1,14 +1,10 @@
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
 use crate::config::Config;
 use clerk_rs::{
     apis::{sessions_api, users_api},
     clerk::Clerk,
-    models::{self, UpdateUserMetadataRequest},
-    ClerkConfiguration,
+    models, ClerkConfiguration,
 };
 use secrecy::ExposeSecret;
-use serde_json::json;
 
 #[derive(Debug)]
 pub enum ClerkError {
@@ -57,58 +53,6 @@ impl ClerkHandler {
         }
     }
 
-    pub async fn update_user_claim(&self, user_id: &str) -> Result<models::User, ClerkError> {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards");
-        let user = self.get_user(user_id).await?;
-        let update_request = Some(UpdateUserMetadataRequest {
-            public_metadata: None,
-            unsafe_metadata: None,
-            private_metadata: Some(json!({
-                "claim_timestamp":  timestamp.as_secs().to_string(),
-            })),
-        });
-
-        let update_res = users_api::User::update_user_metadata(
-            &self.client,
-            user.clone().id.unwrap().as_str(),
-            update_request,
-        )
-        .await;
-
-        if update_res.is_err() {
-            return Err(ClerkError::FailedToUpdateUser);
-        }
-
-        Ok(user)
-    }
-
-    pub fn check_dispense_interval(&self, seconds_str: &str) -> bool {
-        if let Ok(seconds) = seconds_str.parse::<u64>() {
-            let given_time = UNIX_EPOCH + Duration::from_secs(seconds);
-
-            if let Ok(duration_since_given) = SystemTime::now().duration_since(given_time) {
-                let diff_seconds = duration_since_given.as_secs();
-                return diff_seconds >= self.dispense_limit_interval
-                    && diff_seconds < self.dispense_limit_interval * 2;
-            }
-        }
-        false
-    }
-
-    pub async fn check_user_claim(&self, user_id: &str) -> Result<bool, ClerkError> {
-        let user = self.get_user(user_id).await?;
-        match user.private_metadata {
-            Some(metadata) => {
-                let value = metadata.unwrap();
-                let claim_timestamp = value["claim_timestamp"].as_str().unwrap_or("0");
-                Ok(self.check_dispense_interval(claim_timestamp))
-            }
-            None => Ok(false),
-        }
-    }
-
     pub async fn get_user(&self, user_id: &str) -> Result<models::User, ClerkError> {
         let user_res = users_api::User::get_user(&self.client, user_id).await;
         let user = if let Ok(user_res) = user_res {
@@ -135,11 +79,5 @@ impl ClerkHandler {
         let user_id = session.user_id.clone();
         let user = self.get_user(user_id.as_str()).await?;
         Ok(ClerkResponse { user, session })
-    }
-
-    pub async fn user_id_from_session(&self, session_token: &str) -> Result<String, ClerkError> {
-        let session = self.get_session(session_token).await?;
-        let user = self.get_user(session.user_id.as_str()).await?;
-        Ok(user.id.unwrap())
     }
 }
