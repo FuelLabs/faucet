@@ -21,6 +21,7 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use secrecy::Secret;
 use serde_json::json;
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -51,29 +52,33 @@ impl MockClock {
 
 #[derive(Debug, Clone)]
 struct MockAuthHandler {
-    user_id: Arc<Mutex<Option<String>>>,
+    user_ids: Arc<Mutex<HashSet<String>>>,
 }
 
 impl MockAuthHandler {
     pub fn new() -> Self {
         Self {
-            user_id: Default::default(),
+            user_ids: Default::default(),
         }
     }
 
-    pub fn set_user_id(&self, user_id: String) {
-        *self.user_id.lock().as_deref_mut().unwrap() = Some(user_id);
+    pub fn register_user(&self, user_id: String) {
+        self.user_ids.lock().as_deref_mut().unwrap().insert(user_id);
     }
 
-    pub fn get_user_id(&self) -> Option<String> {
-        self.user_id.lock().as_deref().unwrap().clone()
+    pub fn is_registered(&self, user_id: &str) -> bool {
+        self.user_ids.lock().as_deref().unwrap().contains(user_id)
     }
 }
 
 #[async_trait]
 impl AuthHandler for MockAuthHandler {
-    async fn get_user_session(&self, _session_token: &str) -> Result<String, AuthError> {
-        Ok(self.get_user_id().expect("User ID should be set"))
+    async fn get_user_session(&self, user_id: &str) -> Result<String, AuthError> {
+        if self.is_registered(user_id) {
+            Ok(user_id.to_string())
+        } else {
+            Err(AuthError::new("User needs to be registered"))
+        }
     }
 }
 
@@ -189,6 +194,10 @@ struct DispenseRequest {
 }
 impl DispenseRequest {
     fn for_recipient(recipient_address: String, context: &TestContext) -> Self {
+        context
+            .auth_handler
+            .register_user(recipient_address.clone());
+
         let client = reqwest::ClientBuilder::new()
             .cookie_store(true)
             .build()
@@ -202,19 +211,15 @@ impl DispenseRequest {
     }
 
     async fn send(&self) -> reqwest::Result<reqwest::Response> {
-        dbg!(&self.recipient_address);
         let addr = self.addr;
-        let x = self
-            .client
+        self.client
             .post(format!("http://{addr}/api/session/validate"))
             .json(&json!({
-                "value": "", // can be empty because we are using mock auth handler
+                "value": self.recipient_address,
             }))
             .send()
             .await
             .unwrap();
-
-        dbg!(x);
 
         self.client
             .post(format!("http://{addr}/api/dispense"))
@@ -284,7 +289,7 @@ async fn dispense_sends_coins_to_valid_address(
 
     context
         .auth_handler
-        .set_user_id(recipient_address_str.clone());
+        .register_user(recipient_address_str.clone());
 
     DispenseRequest::for_recipient(recipient_address_str, &context)
         .send()
@@ -321,8 +326,8 @@ async fn many_concurrent_requests() {
 
     let mut queries = vec![];
     for recipient in recipient_addresses_str {
-        context.auth_handler.set_user_id(recipient.clone());
         queries.push(async {
+            context.auth_handler.register_user(recipient.clone());
             DispenseRequest::for_recipient(recipient, &context)
                 .send()
                 .await
@@ -362,7 +367,7 @@ async fn dispense_once_per_day() {
 
     context
         .auth_handler
-        .set_user_id(recipient_address_str.clone());
+        .register_user(recipient_address_str.clone());
     let response = DispenseRequest::for_recipient(recipient_address_str.clone(), &context)
         .send()
         .await

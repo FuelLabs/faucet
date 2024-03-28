@@ -203,11 +203,17 @@ async fn dispense_auth(
         .await
         .map_err(|_| {
             error(
+                "Loading the session failed".to_string(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?
+        .ok_or_else(|| {
+            error(
                 "Session is missing user_id".to_string(),
                 StatusCode::UNAUTHORIZED,
             )
-        })?
-        .expect("OHH NO"); // TODO: handle this better
+        })?;
+
     check_and_mark_dispense_limit(
         &dispense_tracker,
         user_id.clone(),
