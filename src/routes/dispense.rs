@@ -27,6 +27,7 @@ use serde::Deserialize;
 use serde_json::json;
 use std::time::Duration;
 use std::{str::FromStr, sync::Arc};
+use tower_sessions::Session;
 use tracing::{error, info};
 
 impl IntoResponse for DispenseResponse {
@@ -55,20 +56,20 @@ impl IntoResponse for DispenseInfoResponse {
 
 fn check_and_mark_dispense_limit(
     dispense_tracker: &SharedDispenseTracker,
-    address: Address,
+    user_id: String,
     interval: u64,
 ) -> Result<(), DispenseError> {
     let mut tracker = dispense_tracker.lock().unwrap();
     tracker.evict_expired_entries(interval);
 
-    if tracker.has_tracked(&address) {
+    if tracker.has_tracked(&user_id) {
         return Err(error(
             "Account has already received assets today".to_string(),
             StatusCode::TOO_MANY_REQUESTS,
         ));
     }
 
-    tracker.mark_in_progress(address);
+    tracker.mark_in_progress(user_id);
     Ok(())
 }
 
@@ -149,6 +150,7 @@ pub async fn tokens_handler(
     Extension(client): Extension<Arc<FuelClient>>,
     Extension(network_config): Extension<SharedNetworkConfig>,
     Extension(dispense_tracker): Extension<SharedDispenseTracker>,
+    session: Session,
     Json(input): Json<DispenseInput>,
 ) -> Result<DispenseResponse, DispenseError> {
     dispense_auth(
@@ -158,6 +160,7 @@ pub async fn tokens_handler(
         Extension(client),
         Extension(network_config),
         Extension(dispense_tracker),
+        session,
         Json(input),
     )
     .await
@@ -178,6 +181,7 @@ async fn dispense_auth(
     Extension(client): Extension<Arc<FuelClient>>,
     Extension(network_config): Extension<SharedNetworkConfig>,
     Extension(dispense_tracker): Extension<SharedDispenseTracker>,
+    session: Session,
     Json(input): Json<DispenseInput>,
 ) -> Result<DispenseResponse, DispenseError> {
     let input_address = get_input(input.address.clone(), "address")?;
@@ -194,12 +198,26 @@ async fn dispense_auth(
         ));
     }?;
 
-    check_and_mark_dispense_limit(&dispense_tracker, address, config.dispense_limit_interval)?;
+    let user_id: String = session
+        .get("user_id")
+        .await
+        .map_err(|_| {
+            error(
+                "Session is missing user_id".to_string(),
+                StatusCode::UNAUTHORIZED,
+            )
+        })?
+        .expect("OHH NO"); // TODO: handle this better
+    check_and_mark_dispense_limit(
+        &dispense_tracker,
+        user_id.clone(),
+        config.dispense_limit_interval,
+    )?;
     let cleanup = || {
         dispense_tracker
             .lock()
             .unwrap()
-            .remove_in_progress(&address);
+            .remove_in_progress(&user_id);
     };
 
     let provider = wallet.provider().expect("client provider");
@@ -301,7 +319,7 @@ async fn dispense_auth(
         config.dispense_amount, &address
     );
 
-    dispense_tracker.lock().unwrap().track(address);
+    dispense_tracker.lock().unwrap().track(user_id);
 
     Ok(DispenseResponse {
         status: "Success".to_string(),

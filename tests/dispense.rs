@@ -1,8 +1,10 @@
+use axum::async_trait;
 use fuel_core::chain_config::{ChainConfig, CoinConfig, StateConfig};
 use fuel_core::service::config::Trigger;
 use fuel_core::service::{Config as NodeConfig, FuelService};
 
 use fuel_core_client::client::pagination::{PageDirection, PaginationRequest};
+use fuel_faucet::auth::{AuthError, AuthHandler};
 use fuel_faucet::config::Config;
 
 use fuel_faucet::models::DispenseInfoResponse;
@@ -47,12 +49,41 @@ impl MockClock {
     }
 }
 
+#[derive(Debug, Clone)]
+struct MockAuthHandler {
+    user_id: Arc<Mutex<Option<String>>>,
+}
+
+impl MockAuthHandler {
+    pub fn new() -> Self {
+        Self {
+            user_id: Default::default(),
+        }
+    }
+
+    pub fn set_user_id(&self, user_id: String) {
+        *self.user_id.lock().as_deref_mut().unwrap() = Some(user_id);
+    }
+
+    pub fn get_user_id(&self) -> Option<String> {
+        self.user_id.lock().as_deref().unwrap().clone()
+    }
+}
+
+#[async_trait]
+impl AuthHandler for MockAuthHandler {
+    async fn get_user_session(&self, _session_token: &str) -> Result<String, AuthError> {
+        Ok(self.get_user_id().expect("User ID should be set"))
+    }
+}
+
 struct TestContext {
     #[allow(dead_code)]
     fuel_node: FuelService,
     faucet_config: Config,
     provider: Provider,
     addr: SocketAddr,
+    auth_handler: MockAuthHandler,
     clock: MockClock,
 }
 impl TestContext {
@@ -136,15 +167,62 @@ impl TestContext {
         };
 
         let clock = MockClock::new();
-        let (addr, _) = start_server(faucet_config.clone(), clock.clone()).await;
+        let auth_handler = MockAuthHandler::new();
+        let (addr, _) =
+            start_server(faucet_config.clone(), clock.clone(), auth_handler.clone()).await;
 
         Self {
             fuel_node,
             faucet_config,
             provider,
             addr,
+            auth_handler,
             clock,
         }
+    }
+}
+
+struct DispenseRequest {
+    client: reqwest::Client,
+    recipient_address: String,
+    addr: SocketAddr,
+}
+impl DispenseRequest {
+    fn for_recipient(recipient_address: String, context: &TestContext) -> Self {
+        let client = reqwest::ClientBuilder::new()
+            .cookie_store(true)
+            .build()
+            .unwrap();
+
+        Self {
+            client,
+            recipient_address,
+            addr: context.addr,
+        }
+    }
+
+    async fn send(&self) -> reqwest::Result<reqwest::Response> {
+        dbg!(&self.recipient_address);
+        let addr = self.addr;
+        let x = self
+            .client
+            .post(format!("http://{addr}/api/session/validate"))
+            .json(&json!({
+                "value": "", // can be empty because we are using mock auth handler
+            }))
+            .send()
+            .await
+            .unwrap();
+
+        dbg!(x);
+
+        self.client
+            .post(format!("http://{addr}/api/dispense"))
+            .json(&json!({
+                "address": self.recipient_address,
+            }))
+            .send()
+            .await
     }
 }
 
@@ -203,14 +281,12 @@ async fn dispense_sends_coins_to_valid_address(
     recipient_address_str: String,
 ) {
     let context = TestContext::new(rng).await;
-    let addr = context.addr;
-    let client = reqwest::Client::new();
 
-    client
-        .post(format!("http://{addr}/api/dispense"))
-        .json(&json!({
-            "address": recipient_address_str,
-        }))
+    context
+        .auth_handler
+        .set_user_id(recipient_address_str.clone());
+
+    DispenseRequest::for_recipient(recipient_address_str, &context)
         .send()
         .await
         .unwrap();
@@ -242,18 +318,12 @@ async fn many_concurrent_requests() {
     const COUNT: usize = 30;
     let recipient_addresses_str = generate_recipient_addresses(COUNT, &mut rng);
     let context = TestContext::new(rng).await;
-    let addr = context.addr;
 
     let mut queries = vec![];
     for recipient in recipient_addresses_str {
-        let recipient = recipient.clone();
-        queries.push(async move {
-            let client = reqwest::Client::new();
-            client
-                .post(format!("http://{addr}/api/dispense"))
-                .json(&json!({
-                    "address": recipient,
-                }))
+        context.auth_handler.set_user_id(recipient.clone());
+        queries.push(async {
+            DispenseRequest::for_recipient(recipient, &context)
                 .send()
                 .await
         });
@@ -286,18 +356,14 @@ async fn dispense_once_per_day() {
     let recipient_address: Address = rng.gen();
     let recipient_address_str = format!("{}", &recipient_address);
     let context = TestContext::new(rng).await;
-    let addr = context.addr;
 
     let dispense_interval = 24 * 60 * 60;
     let time_increment = dispense_interval / 6;
 
-    let client = reqwest::Client::new();
-
-    let response = client
-        .post(format!("http://{addr}/api/dispense"))
-        .json(&json!({
-            "address": recipient_address_str.clone(),
-        }))
+    context
+        .auth_handler
+        .set_user_id(recipient_address_str.clone());
+    let response = DispenseRequest::for_recipient(recipient_address_str.clone(), &context)
         .send()
         .await
         .expect("First dispensing request should be successful");
@@ -307,11 +373,7 @@ async fn dispense_once_per_day() {
     for _ in 0..5 {
         context.clock.advance(time_increment);
 
-        let response = reqwest::Client::new()
-            .post(format!("http://{addr}/api/dispense"))
-            .json(&json!({
-                "address": recipient_address_str.clone(),
-            }))
+        let response = DispenseRequest::for_recipient(recipient_address_str.clone(), &context)
             .send()
             .await
             .expect("Subsequent dispensing requests should be successfully sent");
@@ -320,11 +382,7 @@ async fn dispense_once_per_day() {
     }
 
     context.clock.advance(time_increment + 1);
-    let response = reqwest::Client::new()
-        .post(format!("http://{addr}/api/dispense"))
-        .json(&json!({
-            "address": recipient_address_str.clone(),
-        }))
+    let response = DispenseRequest::for_recipient(recipient_address_str.clone(), &context)
         .send()
         .await
         .expect("Dispensing requests after the interval should be successful");

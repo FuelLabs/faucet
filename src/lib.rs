@@ -3,6 +3,7 @@ use crate::{
     constants::{MAX_CONCURRENT_REQUESTS, WALLET_SECRET_DEV_KEY},
     dispense_tracker::DispenseTracker,
 };
+use auth::AuthHandler;
 use axum::{
     error_handling::HandleErrorLayer,
     extract::Extension,
@@ -34,7 +35,7 @@ use tower_http::{
 use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
 use tracing::info;
 
-pub mod clerk;
+pub mod auth;
 pub mod config;
 pub mod models;
 
@@ -94,10 +95,12 @@ pub type SharedWallet = Arc<WalletUnlocked>;
 pub type SharedConfig = Arc<Config>;
 pub type SharedNetworkConfig = Arc<NetworkConfig>;
 pub type SharedDispenseTracker = Arc<Mutex<DispenseTracker>>;
+pub type SharedAuthHandler = Arc<Box<dyn AuthHandler>>;
 
 pub async fn start_server(
     service_config: Config,
     clock: impl Clock + 'static,
+    auth_handler: impl AuthHandler + 'static,
 ) -> (SocketAddr, JoinHandle<Result<(), anyhow::Error>>) {
     info!("{:#?}", &service_config);
 
@@ -206,6 +209,9 @@ pub async fn start_server(
                 .layer(Extension(Arc::new(service_config.clone())))
                 .layer(Extension(Arc::new(network_config)))
                 .layer(Extension(Arc::new(Mutex::new(DispenseTracker::new(clock)))))
+                .layer(Extension(Arc::new(
+                    Box::new(auth_handler) as Box<dyn AuthHandler>
+                )))
                 .layer(
                     CorsLayer::new()
                         .allow_origin(Any)
