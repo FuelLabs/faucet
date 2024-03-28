@@ -330,6 +330,7 @@ async fn dispense_auth(
     Ok(DispenseResponse {
         status: "Success".to_string(),
         tokens: config.dispense_amount,
+        tx_id: tx_id.to_string(),
     })
 }
 
