@@ -13,7 +13,7 @@ export class App extends Component<{ providerUrl: string }> {
 					<FaucetForm providerUrl={providerUrl} />
 				</div>
 				<div class="mt-6 text-xs text-gray-400 text-center">
-					Node url: ${providerUrl}
+					Node url: {providerUrl}
 				</div>
 			</div>
 		);
