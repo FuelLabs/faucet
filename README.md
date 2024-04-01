@@ -40,4 +40,9 @@ bun install
 bun run build
 ```
 
+If you don't have `bun` installed, here is the command to install it:
+```sh
+curl -fsSL https://bun.sh/install | bash
+```
+
 For development you can run `bun run build:watch`.
