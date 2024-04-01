@@ -12,7 +12,6 @@ description = "A token faucet for onboarding fuel users"
 [dependencies]
 anyhow = "1.0"
 axum = "0.7.4"
-axum_static = "1.2.3"
 clerk-rs = "0.2.3"
 fuel-core-client = "0.22.0"
 fuel-tx = "0.43.0"
@@ -20,21 +19,10 @@ fuel-types = "0.43.0"
 fuels-accounts = "0.54.0"
 fuels-core = "0.54.0"
 handlebars = "4.5"
-hex = "0.4.3"
 lazy_static = "1.4"
-memoize = "0.4.2"
-num-bigint = "0.4"
-rand = "0.8.5"
-reqwest = { version = "0.11.24", features = [
-  "json",
-  "cookies",
-  "rustls-tls-webpki-roots",
-], default-features = false }
 secrecy = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
-sha2 = "0.10"
-sha256 = "1.1.4"
 time = "0.3.34"
 tokio = { version = "1.0", features = ["full"] }
 tower = { version = "0.4", features = [
@@ -57,11 +45,14 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 [dev-dependencies]
 fuel-core = { version = "0.22.0", default-features = false }
 fuel-core-txpool = "0.22.0"
-fuel-crypto = "0.43.0"
 fuel-types = { version = "0.43.0", features = ["random"] }
 futures = "0.3"
-insta = "1.14"
 rand = "0.8"
+reqwest = { version = "0.11.24", features = [
+  "json",
+  "cookies",
+  "rustls-tls-webpki-roots",
+], default-features = false }
 tokio = { version = "1.0", features = ["test-util"] }
 
 [build-dependencies]

@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use fuel_faucet::{auth::clerk::ClerkHandler, config::Config, start_server, StdTime};
 use tracing_subscriber::EnvFilter;
 

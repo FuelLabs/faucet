@@ -8,7 +8,7 @@ use fuel_faucet::auth::{AuthError, AuthHandler};
 use fuel_faucet::config::Config;
 
 use fuel_faucet::models::DispenseInfoResponse;
-use fuel_faucet::{start_server, Clock, THE_BIGGEST_AMOUNT};
+use fuel_faucet::{start_server, Clock};
 
 use fuel_tx::{ConsensusParameters, FeeParameters};
 use fuel_types::{Address, AssetId};
@@ -26,6 +26,9 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::usize;
+
+// The amount to fetch the biggest input of the faucet.
+const THE_BIGGEST_AMOUNT: u64 = u32::MAX as u64;
 
 #[derive(Debug, Clone)]
 struct MockClock {

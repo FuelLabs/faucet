@@ -150,7 +150,7 @@ pub async fn tokens_handler(
     Extension(client): Extension<Arc<FuelClient>>,
     Extension(network_config): Extension<SharedNetworkConfig>,
     Extension(dispense_tracker): Extension<SharedDispenseTracker>,
-    session: Session,
+    Extension(session): Extension<Session>,
     Json(input): Json<DispenseInput>,
 ) -> Result<DispenseResponse, DispenseError> {
     dispense_auth(
@@ -160,7 +160,7 @@ pub async fn tokens_handler(
         Extension(client),
         Extension(network_config),
         Extension(dispense_tracker),
-        session,
+        Extension(session),
         Json(input),
     )
     .await
@@ -181,7 +181,7 @@ async fn dispense_auth(
     Extension(client): Extension<Arc<FuelClient>>,
     Extension(network_config): Extension<SharedNetworkConfig>,
     Extension(dispense_tracker): Extension<SharedDispenseTracker>,
-    session: Session,
+    Extension(session): Extension<Session>,
     Json(input): Json<DispenseInput>,
 ) -> Result<DispenseResponse, DispenseError> {
     let input_address = get_input(input.address.clone(), "address")?;
@@ -219,27 +219,37 @@ async fn dispense_auth(
         user_id.clone(),
         config.dispense_limit_interval,
     )?;
-    let cleanup = || {
+
+    struct CleanUpper<Fn>(Fn)
+    where
+        Fn: FnMut();
+
+    impl<Fn> Drop for CleanUpper<Fn>
+    where
+        Fn: FnMut(),
+    {
+        fn drop(&mut self) {
+            self.0();
+        }
+    }
+
+    // We want to remove the address from `in_progress` regardless of the outcome of the transaction.
+    let _cleanup = CleanUpper(|| {
         dispense_tracker
             .lock()
             .unwrap()
             .remove_in_progress(&user_id);
-    };
+    });
 
     let provider = wallet.provider().expect("client provider");
-    let mut tx_id;
 
-    loop {
+    let mut tx_id = None;
+    for _ in 0..5 {
         let mut guard = state.lock().await;
         let coin_output = if let Some(previous_coin_output) = &guard.last_output {
             *previous_coin_output
         } else {
-            get_coin_output(&wallet, config.dispense_amount)
-                .await
-                .map_err(|e| {
-                    cleanup();
-                    e
-                })?
+            get_coin_output(&wallet, config.dispense_amount).await?
         };
 
         let coin_type = CoinType::Coin(Coin {
@@ -277,55 +287,62 @@ async fn dispense_auth(
             .fee_checked_from_tx(&network_config.network_info.consensus_parameters)
             .expect("Should be able to calculate fee");
 
-        tx_id = script.id(network_config.network_info.consensus_parameters.chain_id);
+        let id = script.id(network_config.network_info.consensus_parameters.chain_id);
         let result = tokio::time::timeout(
             Duration::from_secs(config.timeout),
             provider.send_transaction(script),
         )
         .await
-        .map(|r| {
+        .map_err(|_| {
+            error(
+                format!("Timeout while submitting transaction for address: {address:X}"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })
+        .and_then(|r| {
             r.map_err(|e| {
                 error(
-                    format!("Failed to submit transaction: {e}"),
+                    format!(
+                        "Failed to submit transaction for address: {address:X} with error: {}",
+                        e
+                    ),
                     StatusCode::INTERNAL_SERVER_ERROR,
                 )
             })
-        })
-        .map_err(|e| {
-            error(
-                format!("Timeout while submitting transaction: {e}"),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            )
         });
 
         match result {
-            Ok(Ok(_)) => {
+            Ok(_) => {
                 guard.last_output = Some(CoinOutput {
-                    utxo_id: UtxoId::new(tx_id, 1),
+                    utxo_id: UtxoId::new(id, 1),
                     owner: coin_output.owner,
                     amount: coin_output.amount - total_fee.min_fee() - config.dispense_amount,
                 });
+                tx_id = Some(id);
                 break;
             }
-            _ => {
+            Err(e) => {
+                tracing::warn!("{}", e);
                 guard.last_output = None;
             }
         };
     }
 
-    submit_tx_with_timeout(&client, &tx_id, config.timeout)
-        .await
-        .map_err(|e| {
-            cleanup();
-            e
-        })?;
+    let Some(tx_id) = tx_id else {
+        return Err(error(
+            "Failed to submit transaction".to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ));
+    };
+
+    submit_tx_with_timeout(&client, &tx_id, config.timeout).await?;
 
     info!(
         "dispensed {} tokens to {:#x}",
         config.dispense_amount, &address
     );
 
-    dispense_tracker.lock().unwrap().track(user_id);
+    dispense_tracker.lock().unwrap().track(user_id.clone());
 
     Ok(DispenseResponse {
         status: "Success".to_string(),

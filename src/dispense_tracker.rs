@@ -50,7 +50,7 @@ impl DispenseTracker {
         }
     }
 
-    pub fn track(&mut self, user_id: String) {
+    pub fn track(&mut self, user_id: UserId) {
         self.in_progress.remove(&user_id);
 
         let timestamp = self.clock.now();

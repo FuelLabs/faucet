@@ -7,9 +7,9 @@ pub const CLERK_PUB_KEY: &str = "CLERK_PUB_KEY";
 pub const CLERK_SECRET_KEY: &str = "CLERK_SECRET_KEY";
 pub const PUBLIC_FUEL_NODE_URL: &str = "PUBLIC_FUEL_NODE_URL";
 pub const WALLET_SECRET_DEV_KEY: &str =
-    "a449b1ffee0e2205fa924c6740cc48b3b473aa28587df6dab12abc245d1f5298";
+    "99ad179d4f892ff3124ccd817408ff8a4452d9c16bb1b4968b8a59797e13cd7a";
 pub const FUEL_NODE_URL: &str = "FUEL_NODE_URL";
-pub const DEFAULT_NODE_URL: &str = "http://127.0.0.1:4000";
+pub const DEFAULT_NODE_URL: &str = "https://beta-5.fuel.network";
 pub const DISPENSE_AMOUNT: &str = "DISPENSE_AMOUNT";
 pub const DISPENSE_INTERVAL: &str = "DISPENSE_LIMIT_INTERVAL";
 pub const DEFAULT_DISPENSE_INTERVAL: u64 = 24 * 60 * 60;

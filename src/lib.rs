@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use crate::{
     config::Config,
     constants::{MAX_CONCURRENT_REQUESTS, WALLET_SECRET_DEV_KEY},
@@ -24,7 +26,7 @@ use std::{
     net::SocketAddr,
     sync::{Arc, Mutex},
 };
-use time::ext::{NumericalDuration, NumericalStdDuration};
+use time::ext::NumericalDuration;
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -44,9 +46,6 @@ mod dispense_tracker;
 mod routes;
 
 pub use dispense_tracker::{Clock, StdTime};
-
-// The amount to fetch the biggest input of the faucet.
-pub const THE_BIGGEST_AMOUNT: u64 = u32::MAX as u64;
 
 #[derive(Debug)]
 pub struct NetworkConfig {
@@ -199,7 +198,7 @@ pub async fn start_server(
                 .layer(HandleErrorLayer::new(handle_error))
                 .load_shed()
                 .concurrency_limit(MAX_CONCURRENT_REQUESTS)
-                .timeout(NumericalStdDuration::std_seconds(60))
+                .timeout(std::time::Duration::from_secs(60))
                 .layer(TraceLayer::new_for_http())
                 .layer(Extension(Arc::new(wallet)))
                 .layer(Extension(Arc::new(client)))
