@@ -1,6 +1,6 @@
 use crate::{
-    clerk::ClerkHandler, models::*, CoinOutput, SharedConfig, SharedDispenseTracker,
-    SharedFaucetState, SharedNetworkConfig, SharedWallet,
+    models::*, CoinOutput, SharedConfig, SharedDispenseTracker, SharedFaucetState,
+    SharedNetworkConfig, SharedWallet,
 };
 use axum::{
     extract::Extension,
@@ -56,27 +56,20 @@ impl IntoResponse for DispenseInfoResponse {
 
 fn check_and_mark_dispense_limit(
     dispense_tracker: &SharedDispenseTracker,
-    address: Address,
+    user_id: String,
     interval: u64,
 ) -> Result<(), DispenseError> {
     let mut tracker = dispense_tracker.lock().unwrap();
     tracker.evict_expired_entries(interval);
 
-    if tracker.has_tracked(&address) {
+    if tracker.has_tracked(&user_id) {
         return Err(error(
             "Account has already received assets today".to_string(),
             StatusCode::TOO_MANY_REQUESTS,
         ));
     }
 
-    if tracker.is_in_progress(&address) {
-        return Err(error(
-            "Account is already in the process of receiving assets".to_string(),
-            StatusCode::TOO_MANY_REQUESTS,
-        ));
-    }
-
-    tracker.mark_in_progress(address);
+    tracker.mark_in_progress(user_id);
     Ok(())
 }
 
@@ -192,35 +185,6 @@ async fn dispense_auth(
     Json(input): Json<DispenseInput>,
 ) -> Result<DispenseResponse, DispenseError> {
     let input_address = get_input(input.address.clone(), "address")?;
-    let clerk = ClerkHandler::new(&config);
-    let jwt_token: Option<String> = session.get("JWT_TOKEN").await.unwrap();
-    let user_id = clerk
-        .user_id_from_session(jwt_token.clone().unwrap().as_str())
-        .await
-        .map_err(|e| {
-            error(
-                format!("Failed to get user id: {e}"),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            )
-        })?;
-
-    let has_claimed_res = clerk.check_user_claim(user_id.clone().as_str()).await;
-    let has_claimed = match has_claimed_res {
-        Ok(claimed) => claimed,
-        Err(e) => {
-            return Err(error(
-                format!("Failed to check user claim: {e}"),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            ))
-        }
-    };
-
-    if has_claimed {
-        return Err(error(
-            "User has already claimed tokens".to_string(),
-            StatusCode::TOO_MANY_REQUESTS,
-        ));
-    }
 
     // parse deposit address
     let address = if let Ok(address) = Address::from_str(input_address.as_str()) {
@@ -234,38 +198,48 @@ async fn dispense_auth(
         ));
     }?;
 
-    check_and_mark_dispense_limit(&dispense_tracker, address, config.dispense_limit_interval)?;
+    let user_id: String = session
+        .get("user_id")
+        .await
+        .map_err(|_| {
+            error(
+                "Loading the session failed".to_string(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?
+        .ok_or_else(|| {
+            error(
+                "Session is missing user_id".to_string(),
+                StatusCode::UNAUTHORIZED,
+            )
+        })?;
 
-    struct CleanUpper<Fn>(Fn)
-    where
-        Fn: FnMut();
-
-    impl<Fn> Drop for CleanUpper<Fn>
-    where
-        Fn: FnMut(),
-    {
-        fn drop(&mut self) {
-            self.0();
-        }
-    }
-
-    // We want to remove the address from `in_progress` regardless of the outcome of the transaction.
-    let _cleanup = CleanUpper(|| {
+    check_and_mark_dispense_limit(
+        &dispense_tracker,
+        user_id.clone(),
+        config.dispense_limit_interval,
+    )?;
+    let cleanup = || {
         dispense_tracker
             .lock()
             .unwrap()
-            .remove_in_progress(&address);
-    });
+            .remove_in_progress(&user_id);
+    };
 
     let provider = wallet.provider().expect("client provider");
+    let mut tx_id;
 
-    let mut tx_id = None;
-    for _ in 0..5 {
+    loop {
         let mut guard = state.lock().await;
         let coin_output = if let Some(previous_coin_output) = &guard.last_output {
             *previous_coin_output
         } else {
-            get_coin_output(&wallet, config.dispense_amount).await?
+            get_coin_output(&wallet, config.dispense_amount)
+                .await
+                .map_err(|e| {
+                    cleanup();
+                    e
+                })?
         };
 
         let coin_type = CoinType::Coin(Coin {
@@ -303,77 +277,60 @@ async fn dispense_auth(
             .fee_checked_from_tx(&network_config.network_info.consensus_parameters)
             .expect("Should be able to calculate fee");
 
-        let id = script.id(network_config.network_info.consensus_parameters.chain_id);
+        tx_id = script.id(network_config.network_info.consensus_parameters.chain_id);
         let result = tokio::time::timeout(
             Duration::from_secs(config.timeout),
             provider.send_transaction(script),
         )
         .await
-        .map_err(|_| {
-            error(
-                format!("Timeout while submitting transaction for address: {address:X}"),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            )
-        })
-        .and_then(|r| {
+        .map(|r| {
             r.map_err(|e| {
                 error(
-                    format!(
-                        "Failed to submit transaction for address: {address:X} with error: {}",
-                        e
-                    ),
+                    format!("Failed to submit transaction: {e}"),
                     StatusCode::INTERNAL_SERVER_ERROR,
                 )
             })
+        })
+        .map_err(|e| {
+            error(
+                format!("Timeout while submitting transaction: {e}"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
         });
 
         match result {
-            Ok(_) => {
+            Ok(Ok(_)) => {
                 guard.last_output = Some(CoinOutput {
-                    utxo_id: UtxoId::new(id, 1),
+                    utxo_id: UtxoId::new(tx_id, 1),
                     owner: coin_output.owner,
                     amount: coin_output.amount - total_fee.min_fee() - config.dispense_amount,
                 });
-                tx_id = Some(id);
                 break;
             }
-            Err(e) => {
-                tracing::warn!("{}", e);
+            _ => {
                 guard.last_output = None;
             }
         };
     }
 
-    let Some(tx_id) = tx_id else {
-        return Err(error(
-            "Failed to submit transaction".to_string(),
-            StatusCode::INTERNAL_SERVER_ERROR,
-        ));
-    };
-
-    submit_tx_with_timeout(&client, &tx_id, config.timeout).await?;
+    submit_tx_with_timeout(&client, &tx_id, config.timeout)
+        .await
+        .map_err(|e| {
+            cleanup();
+            e
+        })?;
 
     info!(
         "dispensed {} tokens to {:#x}",
         config.dispense_amount, &address
     );
 
-    let mut tracker = dispense_tracker.lock().unwrap();
-    tracker.track(address);
-
-    clerk
-        .update_user_claim(user_id.clone().as_str())
-        .await
-        .map_err(|e| {
-            error(
-                format!("Failed to update user claim: {e}"),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            )
-        })?;
+    dispense_tracker.lock().unwrap().track(user_id);
 
     Ok(DispenseResponse {
         status: "Success".to_string(),
         tokens: config.dispense_amount,
+        tx_id: tx_id.to_string(),
     })
 }
 

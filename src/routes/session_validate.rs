@@ -1,4 +1,4 @@
-use crate::{clerk::ClerkHandler, SharedConfig};
+use crate::SharedAuthHandler;
 use axum::{http::StatusCode, response::IntoResponse, Extension, Json};
 use serde::Deserialize;
 use serde_json::json;
@@ -10,14 +10,13 @@ pub struct SessionData {
 }
 
 pub async fn handler(
-    Extension(config): Extension<SharedConfig>,
-    session_manager: Session,
+    Extension(auth_handler): Extension<SharedAuthHandler>,
+    session: Session,
     Json(data): Json<SessionData>,
 ) -> impl IntoResponse {
-    let clerk = ClerkHandler::new(&config);
-    let data = clerk.get_user_session(data.value.as_str()).await;
-    let data = match data {
-        Ok(data) => data,
+    let data = auth_handler.get_user_session(data.value.as_str()).await;
+    let user_id = match data {
+        Ok(user_id) => user_id,
         Err(_) => {
             return (
                 StatusCode::UNAUTHORIZED,
@@ -27,14 +26,10 @@ pub async fn handler(
     };
 
     let response = Json(json!({
-        "user": data.user,
-        "session": data.session,
+        "user": user_id,
     }));
 
-    session_manager
-        .insert("JWT_TOKEN", data.session.id.to_string())
-        .await
-        .unwrap();
+    session.insert("user_id", user_id).await.unwrap();
 
     (StatusCode::OK, response)
 }
