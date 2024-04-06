@@ -1,21 +1,21 @@
 {
-  "name": "my-app",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "build": "bun build ./src/index.tsx --outdir ../static --minify --target browser",
-    "build:watch": "bun run build --watch"
-  },
-  "dependencies": {
-    "@clerk/clerk-js": "^4.70.5",
-    "@preact/signals": "^1.2.2",
-    "canvas-confetti": "^1.9.2",
-    "confetti": "^2.0.3",
-    "mitt": "^3.0.1",
-    "preact": "^10.19.6"
-  },
-  "devDependencies": {
-    "typescript": "^5.2.2"
-  }
+	"name": "my-app",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"scripts": {
+		"build": "bun build ./src/index.tsx --outdir ../static --minify --target browser --entry-naming [dir]/js/[name].[hash].[ext]",
+		"build:watch": "bun run build --watch"
+	},
+	"dependencies": {
+		"@clerk/clerk-js": "^4.70.5",
+		"@preact/signals": "^1.2.2",
+		"canvas-confetti": "^1.9.2",
+		"confetti": "^2.0.3",
+		"mitt": "^3.0.1",
+		"preact": "^10.19.6"
+	},
+	"devDependencies": {
+		"typescript": "^5.2.2"
+	}
 }
