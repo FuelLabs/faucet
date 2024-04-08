@@ -1,4 +1,6 @@
-use fuel_faucet::{config::Config, start_server, StdTime};
+#![deny(warnings)]
+
+use fuel_faucet::{auth::clerk::ClerkHandler, config::Config, start_server, StdTime};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -6,7 +8,9 @@ async fn main() {
     let config = Config::default();
     init_logger(&config);
     let clock = StdTime {};
-    let (_, task) = start_server(config, clock).await;
+    let auth_handler = ClerkHandler::new(&config);
+
+    let (_, task) = start_server(config, clock, auth_handler).await;
     let _ = task.await.unwrap();
 }
 

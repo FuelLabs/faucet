@@ -1,11 +1,15 @@
+use axum::async_trait;
 use fuel_core::chain_config::{ChainConfig, CoinConfig, StateConfig};
 use fuel_core::service::config::Trigger;
 use fuel_core::service::{Config as NodeConfig, FuelService};
 
 use fuel_core_client::client::pagination::{PageDirection, PaginationRequest};
+use fuel_faucet::auth::{AuthError, AuthHandler};
 use fuel_faucet::config::Config;
+
 use fuel_faucet::models::DispenseInfoResponse;
-use fuel_faucet::{start_server, Clock, THE_BIGGEST_AMOUNT};
+use fuel_faucet::{start_server, Clock};
+
 use fuel_tx::{ConsensusParameters, FeeParameters};
 use fuel_types::{Address, AssetId};
 use fuels_accounts::fuel_crypto::SecretKey;
@@ -17,10 +21,14 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use secrecy::Secret;
 use serde_json::json;
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::usize;
+
+// The amount to fetch the biggest input of the faucet.
+const THE_BIGGEST_AMOUNT: u64 = u32::MAX as u64;
 
 #[derive(Debug, Clone)]
 struct MockClock {
@@ -45,12 +53,45 @@ impl MockClock {
     }
 }
 
+#[derive(Debug, Clone)]
+struct MockAuthHandler {
+    user_ids: Arc<Mutex<HashSet<String>>>,
+}
+
+impl MockAuthHandler {
+    pub fn new() -> Self {
+        Self {
+            user_ids: Default::default(),
+        }
+    }
+
+    pub fn register_user(&self, user_id: String) {
+        self.user_ids.lock().as_deref_mut().unwrap().insert(user_id);
+    }
+
+    pub fn is_registered(&self, user_id: &str) -> bool {
+        self.user_ids.lock().as_deref().unwrap().contains(user_id)
+    }
+}
+
+#[async_trait]
+impl AuthHandler for MockAuthHandler {
+    async fn get_user_session(&self, user_id: &str) -> Result<String, AuthError> {
+        if self.is_registered(user_id) {
+            Ok(user_id.to_string())
+        } else {
+            Err(AuthError::new("User needs to be registered"))
+        }
+    }
+}
+
 struct TestContext {
     #[allow(dead_code)]
     fuel_node: FuelService,
     faucet_config: Config,
     provider: Provider,
     addr: SocketAddr,
+    auth_handler: MockAuthHandler,
     clock: MockClock,
 }
 impl TestContext {
@@ -134,15 +175,62 @@ impl TestContext {
         };
 
         let clock = MockClock::new();
-        let (addr, _) = start_server(faucet_config.clone(), clock.clone()).await;
+        let auth_handler = MockAuthHandler::new();
+        let (addr, _) =
+            start_server(faucet_config.clone(), clock.clone(), auth_handler.clone()).await;
 
         Self {
             fuel_node,
             faucet_config,
             provider,
             addr,
+            auth_handler,
             clock,
         }
+    }
+}
+
+struct DispenseRequest {
+    client: reqwest::Client,
+    recipient_address: String,
+    addr: SocketAddr,
+}
+impl DispenseRequest {
+    fn for_recipient(recipient_address: String, context: &TestContext) -> Self {
+        context
+            .auth_handler
+            .register_user(recipient_address.clone());
+
+        let client = reqwest::ClientBuilder::new()
+            .cookie_store(true)
+            .build()
+            .unwrap();
+
+        Self {
+            client,
+            recipient_address,
+            addr: context.addr,
+        }
+    }
+
+    async fn send(&self) -> reqwest::Result<reqwest::Response> {
+        let addr = self.addr;
+        self.client
+            .post(format!("http://{addr}/api/session/validate"))
+            .json(&json!({
+                "value": self.recipient_address,
+            }))
+            .send()
+            .await
+            .unwrap();
+
+        self.client
+            .post(format!("http://{addr}/api/dispense"))
+            .json(&json!({
+                "address": self.recipient_address,
+            }))
+            .send()
+            .await
     }
 }
 
@@ -174,7 +262,7 @@ async fn dispense_sends_coins_to_valid_address_hex_address() {
     let mut rng = StdRng::seed_from_u64(42);
     let recipient_address: Address = rng.gen();
 
-    _dispense_sends_coins_to_valid_address(
+    dispense_sends_coins_to_valid_address(
         rng,
         recipient_address.into(),
         format!("{:#x}", &recipient_address),
@@ -187,7 +275,7 @@ async fn dispense_sends_coins_to_valid_address_non_hex() {
     let mut rng = StdRng::seed_from_u64(42);
     let recipient_address: Address = rng.gen();
 
-    _dispense_sends_coins_to_valid_address(
+    dispense_sends_coins_to_valid_address(
         rng,
         recipient_address.into(),
         format!("{}", &recipient_address),
@@ -195,21 +283,18 @@ async fn dispense_sends_coins_to_valid_address_non_hex() {
     .await
 }
 
-async fn _dispense_sends_coins_to_valid_address(
+async fn dispense_sends_coins_to_valid_address(
     rng: StdRng,
     recipient_address: Bech32Address,
     recipient_address_str: String,
 ) {
     let context = TestContext::new(rng).await;
-    let addr = context.addr;
-    let client = reqwest::Client::new();
 
-    client
-        .post(format!("http://{addr}/dispense"))
-        .json(&json!({
-            "captcha": "",
-            "address": recipient_address_str,
-        }))
+    context
+        .auth_handler
+        .register_user(recipient_address_str.clone());
+
+    DispenseRequest::for_recipient(recipient_address_str, &context)
         .send()
         .await
         .unwrap();
@@ -241,19 +326,12 @@ async fn many_concurrent_requests() {
     const COUNT: usize = 30;
     let recipient_addresses_str = generate_recipient_addresses(COUNT, &mut rng);
     let context = TestContext::new(rng).await;
-    let addr = context.addr;
 
     let mut queries = vec![];
     for recipient in recipient_addresses_str {
-        let recipient = recipient.clone();
-        queries.push(async move {
-            let client = reqwest::Client::new();
-            client
-                .post(format!("http://{addr}/dispense"))
-                .json(&json!({
-                    "captcha": "",
-                    "address": recipient,
-                }))
+        queries.push(async {
+            context.auth_handler.register_user(recipient.clone());
+            DispenseRequest::for_recipient(recipient, &context)
                 .send()
                 .await
         });
@@ -286,17 +364,14 @@ async fn dispense_once_per_day() {
     let recipient_address: Address = rng.gen();
     let recipient_address_str = format!("{}", &recipient_address);
     let context = TestContext::new(rng).await;
-    let addr = context.addr;
 
     let dispense_interval = 24 * 60 * 60;
     let time_increment = dispense_interval / 6;
 
-    let response = reqwest::Client::new()
-        .post(format!("http://{addr}/dispense"))
-        .json(&json!({
-            "captcha": "",
-            "address": recipient_address_str.clone(),
-        }))
+    context
+        .auth_handler
+        .register_user(recipient_address_str.clone());
+    let response = DispenseRequest::for_recipient(recipient_address_str.clone(), &context)
         .send()
         .await
         .expect("First dispensing request should be successful");
@@ -306,12 +381,7 @@ async fn dispense_once_per_day() {
     for _ in 0..5 {
         context.clock.advance(time_increment);
 
-        let response = reqwest::Client::new()
-            .post(format!("http://{addr}/dispense"))
-            .json(&json!({
-                "captcha": "",
-                "address": recipient_address_str.clone(),
-            }))
+        let response = DispenseRequest::for_recipient(recipient_address_str.clone(), &context)
             .send()
             .await
             .expect("Subsequent dispensing requests should be successfully sent");
@@ -320,12 +390,7 @@ async fn dispense_once_per_day() {
     }
 
     context.clock.advance(time_increment + 1);
-    let response = reqwest::Client::new()
-        .post(format!("http://{addr}/dispense"))
-        .json(&json!({
-            "captcha": "",
-            "address": recipient_address_str.clone(),
-        }))
+    let response = DispenseRequest::for_recipient(recipient_address_str.clone(), &context)
         .send()
         .await
         .expect("Dispensing requests after the interval should be successful");

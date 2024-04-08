@@ -27,7 +27,7 @@ jobs:
     needs: cancel-previous-runs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -56,7 +56,7 @@ jobs:
     needs: cancel-previous-runs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -70,7 +70,7 @@ jobs:
     needs: cancel-previous-runs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -85,7 +85,7 @@ jobs:
     needs: cancel-previous-runs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -101,7 +101,7 @@ jobs:
     needs: cancel-previous-runs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -124,7 +124,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
+
+      - name: Installing Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Building Frontend
+        run: |
+          cd frontend
+          bun install
+          bun run build
 
       - name: Docker meta
         id: meta
