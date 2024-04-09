@@ -62,18 +62,18 @@ spec:
               value: "{{ .Values.app.target_port }}"
             - name: WALLET_SECRET_KEY
               value: "{{ .Values.app.wallet_secret_key }}"
+          {{- if .Values.app.captcha_key }}
+            - name: CAPTCHA_KEY
+              value: "{{ .Values.app.captcha_key }}"
+          {{- end }}
+          {{- if .Values.app.captcha_secret }}
+            - name: CAPTCHA_SECRET
+              value: "{{ .Values.app.captcha_secret }}"
+          {{- end }}
             - name: FUEL_NODE_URL
               value: "{{ .Values.app.node_url }}"
             - name: PUBLIC_FUEL_NODE_URL
               value: "{{ .Values.app.public_node_url }}"
-          {{- if .Values.app.clerk_pub_key }}
-            - name: CLERK_PUB_KEY
-              value: "{{ .Values.app.clerk_pub_key }}"
-          {{- end }}
-          {{- if .Values.app.clerk_secret_key }}
-            - name: CLERK_SECRET_KEY
-              value: "{{ .Values.app.clerk_secret_key }}"
-          {{- end }}
           {{- if .Values.app.max_dispenses_per_minute }}
             - name: MAX_DISPENSES_PER_MINUTE
               value: "{{ .Values.app.max_dispenses_per_minute }}"

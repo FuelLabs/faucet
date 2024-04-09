@@ -1,34 +1,100 @@
 use crate::{
-    models::*, CoinOutput, SharedConfig, SharedDispenseTracker, SharedFaucetState,
+    models::*, recaptcha, CoinOutput, SharedConfig, SharedDispenseTracker, SharedFaucetState,
     SharedNetworkConfig, SharedWallet,
 };
 use axum::{
-    extract::Extension,
-    http::StatusCode,
-    response::{IntoResponse, Response},
-    Json,
+    response::{Html, IntoResponse, Response},
+    Extension, Json,
 };
+
 use fuel_core_client::client::FuelClient;
 use fuel_tx::UtxoId;
-use fuel_types::{AssetId, Bytes32};
+use fuel_types::{Address, AssetId, Bytes32};
 use fuels_accounts::{wallet::WalletUnlocked, Account, Signer, ViewOnlyAccount};
+use fuels_core::types::transaction::{Transaction, TxPolicies};
+use fuels_core::types::transaction_builders::BuildableTransaction;
 use fuels_core::types::{
     bech32::Bech32Address,
-    transaction::{Transaction, TxPolicies},
-    transaction_builders::BuildableTransaction,
-    Address,
-};
-use fuels_core::types::{
     coin::{Coin, CoinStatus},
     coin_type::CoinType,
 };
 use fuels_core::types::{input::Input, transaction_builders::ScriptTransactionBuilder};
-use serde::Deserialize;
+use handlebars::Handlebars;
+use reqwest::StatusCode;
+use secrecy::ExposeSecret;
 use serde_json::json;
+use std::sync::Arc;
 use std::time::Duration;
-use std::{str::FromStr, sync::Arc};
-use tower_sessions::Session;
+use std::{
+    collections::BTreeMap,
+    str::FromStr,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tracing::{error, info};
+
+// The amount to fetch the biggest input of the faucet.
+pub const THE_BIGGEST_AMOUNT: u64 = u32::MAX as u64;
+
+lazy_static::lazy_static! {
+    static ref START_TIME: u64 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+}
+
+#[memoize::memoize]
+pub fn render_page(public_node_url: String, captcha_key: Option<String>) -> String {
+    let template = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
+    // sub in values
+    let mut handlebars = Handlebars::new();
+    handlebars
+        .register_template_string("index", template)
+        .unwrap();
+    let mut data = BTreeMap::new();
+    data.insert("page_title", "Fuel Faucet");
+    data.insert("public_node_url", public_node_url.as_str());
+    // if captcha is enabled, add captcha key
+    if let Some(captcha_key) = &captcha_key {
+        data.insert("captcha_key", captcha_key.as_str());
+    }
+    // render page
+    handlebars.render("index", &data).unwrap()
+}
+
+pub async fn main(Extension(config): Extension<SharedConfig>) -> Html<String> {
+    let public_node_url = config.public_node_url.clone();
+    let captcha_key = config.captcha_key.clone();
+    Html(render_page(public_node_url, captcha_key))
+}
+
+#[tracing::instrument(skip_all)]
+pub async fn health(Extension(wallet): Extension<SharedWallet>) -> Response {
+    // ping client for health
+    let client = wallet
+        .provider()
+        .expect("client provider")
+        .healthy()
+        .await
+        .unwrap_or(false);
+
+    let time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+
+    let status = if client {
+        StatusCode::OK
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
+    };
+
+    (
+        status,
+        Json(json!({
+            "up": true,
+            "uptime": time - *START_TIME,
+            "fuel-core" : client,
+        })),
+    )
+        .into_response()
+}
 
 impl IntoResponse for DispenseResponse {
     fn into_response(self) -> Response {
@@ -56,20 +122,27 @@ impl IntoResponse for DispenseInfoResponse {
 
 fn check_and_mark_dispense_limit(
     dispense_tracker: &SharedDispenseTracker,
-    user_id: String,
+    address: Address,
     interval: u64,
 ) -> Result<(), DispenseError> {
     let mut tracker = dispense_tracker.lock().unwrap();
     tracker.evict_expired_entries(interval);
 
-    if tracker.has_tracked(&user_id) {
+    if tracker.has_tracked(&address) {
         return Err(error(
             "Account has already received assets today".to_string(),
             StatusCode::TOO_MANY_REQUESTS,
         ));
     }
 
-    tracker.mark_in_progress(user_id);
+    if tracker.is_in_progress(&address) {
+        return Err(error(
+            "Account is already in the process of receiving assets".to_string(),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    tracker.mark_in_progress(address);
     Ok(())
 }
 
@@ -136,60 +209,20 @@ async fn submit_tx_with_timeout(
     Ok(())
 }
 
-#[derive(Deserialize, Debug)]
-pub struct Method {
-    pub method: Option<String>,
-}
-
-#[allow(clippy::too_many_arguments)]
 #[tracing::instrument(skip_all)]
-pub async fn tokens_handler(
+pub async fn dispense_tokens(
+    Json(input): Json<DispenseInput>,
     Extension(wallet): Extension<SharedWallet>,
     Extension(state): Extension<SharedFaucetState>,
     Extension(config): Extension<SharedConfig>,
     Extension(client): Extension<Arc<FuelClient>>,
     Extension(network_config): Extension<SharedNetworkConfig>,
     Extension(dispense_tracker): Extension<SharedDispenseTracker>,
-    Extension(session): Extension<Session>,
-    Json(input): Json<DispenseInput>,
 ) -> Result<DispenseResponse, DispenseError> {
-    dispense_auth(
-        Extension(wallet),
-        Extension(state),
-        Extension(config),
-        Extension(client),
-        Extension(network_config),
-        Extension(dispense_tracker),
-        Extension(session),
-        Json(input),
-    )
-    .await
-}
-
-fn get_input<T>(value: Option<T>, prop: &str) -> Result<T, DispenseError> {
-    let value =
-        value.ok_or_else(|| error(format!("{} is required", prop), StatusCode::BAD_REQUEST))?;
-    Ok(value)
-}
-
-#[allow(clippy::too_many_arguments)]
-#[tracing::instrument(skip_all)]
-async fn dispense_auth(
-    Extension(wallet): Extension<SharedWallet>,
-    Extension(state): Extension<SharedFaucetState>,
-    Extension(config): Extension<SharedConfig>,
-    Extension(client): Extension<Arc<FuelClient>>,
-    Extension(network_config): Extension<SharedNetworkConfig>,
-    Extension(dispense_tracker): Extension<SharedDispenseTracker>,
-    Extension(session): Extension<Session>,
-    Json(input): Json<DispenseInput>,
-) -> Result<DispenseResponse, DispenseError> {
-    let input_address = get_input(input.address.clone(), "address")?;
-
     // parse deposit address
-    let address = if let Ok(address) = Address::from_str(input_address.as_str()) {
+    let address = if let Ok(address) = Address::from_str(input.address.as_str()) {
         Ok(address)
-    } else if let Ok(address) = Bech32Address::from_str(input_address.as_str()) {
+    } else if let Ok(address) = Bech32Address::from_str(input.address.as_str()) {
         Ok(address.into())
     } else {
         return Err(error(
@@ -198,27 +231,20 @@ async fn dispense_auth(
         ));
     }?;
 
-    let user_id: String = session
-        .get("user_id")
-        .await
-        .map_err(|_| {
-            error(
-                "Loading the session failed".to_string(),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            )
-        })?
-        .ok_or_else(|| {
-            error(
-                "Session is missing user_id".to_string(),
-                StatusCode::UNAUTHORIZED,
-            )
-        })?;
+    // verify captcha
+    if let Some(s) = config.captcha_secret.clone() {
+        recaptcha::verify(s.expose_secret(), input.captcha.as_str(), None)
+            .await
+            .map_err(|e| {
+                tracing::error!("{}", e);
+                DispenseError {
+                    error: "captcha failed".to_string(),
+                    status: StatusCode::UNAUTHORIZED,
+                }
+            })?;
+    }
 
-    check_and_mark_dispense_limit(
-        &dispense_tracker,
-        user_id.clone(),
-        config.dispense_limit_interval,
-    )?;
+    check_and_mark_dispense_limit(&dispense_tracker, address, config.dispense_limit_interval)?;
 
     struct CleanUpper<Fn>(Fn)
     where
@@ -238,7 +264,7 @@ async fn dispense_auth(
         dispense_tracker
             .lock()
             .unwrap()
-            .remove_in_progress(&user_id);
+            .remove_in_progress(&address);
     });
 
     let provider = wallet.provider().expect("client provider");
@@ -342,7 +368,8 @@ async fn dispense_auth(
         config.dispense_amount, &address
     );
 
-    dispense_tracker.lock().unwrap().track(user_id.clone());
+    let mut tracker = dispense_tracker.lock().unwrap();
+    tracker.track(address);
 
     Ok(DispenseResponse {
         status: "Success".to_string(),
@@ -352,7 +379,7 @@ async fn dispense_auth(
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn info_handler(
+pub async fn dispense_info(
     Extension(config): Extension<SharedConfig>,
 ) -> Result<DispenseInfoResponse, DispenseError> {
     Ok(DispenseInfoResponse {

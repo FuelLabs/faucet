@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-type UserId = String;
+use fuel_types::Address;
 
 pub trait Clock: std::fmt::Debug + Send + Sync {
     fn now(&self) -> u64;
@@ -23,9 +23,9 @@ impl Clock for StdTime {
 
 #[derive(Debug)]
 pub struct DispenseTracker {
-    tracked: HashMap<UserId, u64>,
-    queue: BTreeMap<u64, Vec<UserId>>,
-    in_progress: HashSet<UserId>,
+    tracked: HashMap<Address, u64>,
+    queue: BTreeMap<u64, Vec<Address>>,
+    in_progress: HashSet<Address>,
     clock: Box<dyn Clock>,
 }
 
@@ -50,20 +50,20 @@ impl DispenseTracker {
         }
     }
 
-    pub fn track(&mut self, user_id: UserId) {
-        self.in_progress.remove(&user_id);
+    pub fn track(&mut self, address: Address) {
+        self.in_progress.remove(&address);
 
         let timestamp = self.clock.now();
-        self.tracked.insert(user_id.clone(), timestamp);
-        self.queue.entry(timestamp).or_default().push(user_id);
+        self.tracked.insert(address, timestamp);
+        self.queue.entry(timestamp).or_default().push(address);
     }
 
-    pub fn mark_in_progress(&mut self, user_id: String) {
-        self.in_progress.insert(user_id);
+    pub fn mark_in_progress(&mut self, address: Address) {
+        self.in_progress.insert(address);
     }
 
-    pub fn remove_in_progress(&mut self, user_id: &String) {
-        self.in_progress.remove(user_id);
+    pub fn remove_in_progress(&mut self, address: &Address) {
+        self.in_progress.remove(address);
     }
 
     pub fn evict_expired_entries(&mut self, eviction_duration: u64) {
@@ -71,10 +71,10 @@ impl DispenseTracker {
 
         while let Some(oldest_entry) = self.queue.first_entry() {
             if now - oldest_entry.key() > eviction_duration {
-                let (_, user_ids) = oldest_entry.remove_entry();
+                let (_, addresses) = oldest_entry.remove_entry();
 
-                for user_id in user_ids {
-                    self.tracked.remove(&user_id);
+                for address in addresses {
+                    self.tracked.remove(&address);
                 }
             } else {
                 break;
@@ -82,11 +82,11 @@ impl DispenseTracker {
         }
     }
 
-    pub fn has_tracked(&self, user_id: &UserId) -> bool {
-        self.tracked.get(user_id).is_some()
+    pub fn has_tracked(&self, address: &Address) -> bool {
+        self.tracked.get(address).is_some()
     }
 
-    pub fn is_in_progress(&self, user_id: &UserId) -> bool {
-        self.in_progress.contains(user_id)
+    pub fn is_in_progress(&self, address: &Address) -> bool {
+        self.in_progress.contains(address)
     }
 }
