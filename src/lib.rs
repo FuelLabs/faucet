@@ -1,18 +1,16 @@
-#![deny(warnings)]
-
 use crate::{
     config::Config,
     constants::{MAX_CONCURRENT_REQUESTS, WALLET_SECRET_DEV_KEY},
     dispense_tracker::DispenseTracker,
+    routes::health,
 };
-use auth::AuthHandler;
+use anyhow::anyhow;
 use axum::{
     error_handling::HandleErrorLayer,
-    extract::Extension,
     http::{header::CACHE_CONTROL, HeaderValue, StatusCode},
     response::IntoResponse,
     routing::{get, post},
-    BoxError, Json, Router,
+    BoxError, Extension, Json, Router,
 };
 use fuel_core_client::client::FuelClient;
 use fuel_tx::UtxoId;
@@ -23,10 +21,10 @@ use fuels_core::types::transaction_builders::NetworkInfo;
 use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
 use std::{
-    net::SocketAddr,
+    net::{SocketAddr, TcpListener},
     sync::{Arc, Mutex},
+    time::Duration,
 };
-use time::ext::NumericalDuration;
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -34,18 +32,18 @@ use tower_http::{
     set_header::SetResponseHeaderLayer,
     trace::TraceLayer,
 };
-use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
 use tracing::info;
 
-pub mod auth;
 pub mod config;
 pub mod models;
 
 mod constants;
 mod dispense_tracker;
+mod recaptcha;
 mod routes;
 
 pub use dispense_tracker::{Clock, StdTime};
+pub use routes::THE_BIGGEST_AMOUNT;
 
 #[derive(Debug)]
 pub struct NetworkConfig {
@@ -94,12 +92,10 @@ pub type SharedWallet = Arc<WalletUnlocked>;
 pub type SharedConfig = Arc<Config>;
 pub type SharedNetworkConfig = Arc<NetworkConfig>;
 pub type SharedDispenseTracker = Arc<Mutex<DispenseTracker>>;
-pub type SharedAuthHandler = Arc<Box<dyn AuthHandler>>;
 
 pub async fn start_server(
     service_config: Config,
     clock: impl Clock + 'static,
-    auth_handler: impl AuthHandler + 'static,
 ) -> (SocketAddr, JoinHandle<Result<(), anyhow::Error>>) {
     info!("{:#?}", &service_config);
 
@@ -129,7 +125,6 @@ pub async fn start_server(
         .wallet_secret_key
         .clone()
         .unwrap_or_else(|| Secret::new(WALLET_SECRET_DEV_KEY.to_string()));
-
     let wallet = WalletUnlocked::new_from_private_key(
         secret
             .expose_secret()
@@ -151,23 +146,20 @@ pub async fn start_server(
     info!("Faucet Account: {:#x}", Address::from(wallet.address()));
     info!("Faucet Balance: {}", balance);
 
-    let session_store = MemoryStore::default();
-    let session_layer = SessionManagerLayer::new(session_store)
-        .with_secure(false)
-        .with_expiry(Expiry::OnInactivity(NumericalDuration::days(7)));
-
-    let web_layer = ServiceBuilder::new()
-        .layer(SetResponseHeaderLayer::<_>::overriding(
-            CACHE_CONTROL,
-            HeaderValue::from_static("public, max-age=3600, immutable"),
-        ))
-        .layer(session_layer.clone())
-        .into_inner();
-
-    let api_routes = Router::new()
+    // setup routes
+    let app = Router::new()
+        .route(
+            "/",
+            get(routes::main).layer(SetResponseHeaderLayer::<_>::overriding(
+                CACHE_CONTROL,
+                HeaderValue::from_static("public, max-age=3600, immutable"),
+            )),
+        )
+        .route("/health", get(health))
+        .route("/dispense", get(routes::dispense_info))
         .route(
             "/dispense",
-            post(routes::dispense::tokens_handler).route_layer(
+            post(routes::dispense_tokens).route_layer(
                 // Apply rate limiting specifically on the dispense endpoint, and
                 // only allow a single instance at a time to avoid race conditions
                 ServiceBuilder::new()
@@ -177,28 +169,13 @@ pub async fn start_server(
                     .into_inner(),
             ),
         )
-        .route("/session/validate", post(routes::session_validate::handler))
-        .route("/session/remove", post(routes::session_remove::handler));
-
-    // setup routes
-    let app = Router::new()
-        .nest("/api", api_routes)
-        .layer(session_layer)
-        .nest("/static", routes::static_files::handler("static"))
-        .route("/favicon.ico", get(routes::favicon::handler))
-        .route(
-            "/",
-            get(routes::main::handler).route_layer(web_layer.clone()),
-        )
-        .route("/dispense", get(routes::dispense::info_handler))
-        .route("/health", get(routes::health::handler))
         .layer(
             ServiceBuilder::new()
                 // Handle errors from middleware
                 .layer(HandleErrorLayer::new(handle_error))
                 .load_shed()
                 .concurrency_limit(MAX_CONCURRENT_REQUESTS)
-                .timeout(std::time::Duration::from_secs(60))
+                .timeout(Duration::from_secs(60))
                 .layer(TraceLayer::new_for_http())
                 .layer(Extension(Arc::new(wallet)))
                 .layer(Extension(Arc::new(client)))
@@ -208,9 +185,6 @@ pub async fn start_server(
                 .layer(Extension(Arc::new(service_config.clone())))
                 .layer(Extension(Arc::new(network_config)))
                 .layer(Extension(Arc::new(Mutex::new(DispenseTracker::new(clock)))))
-                .layer(Extension(Arc::new(
-                    Box::new(auth_handler) as Box<dyn AuthHandler>
-                )))
                 .layer(
                     CorsLayer::new()
                         .allow_origin(Any)
@@ -220,19 +194,21 @@ pub async fn start_server(
                 .into_inner(),
         );
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], service_config.service_port));
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    let bound_addr = listener.local_addr().unwrap();
-    let task = tokio::spawn(async move {
-        axum::serve(listener, app.into_make_service())
-            .await
-            .unwrap();
-        Ok(())
-    });
-
     // run the server
+    let addr = SocketAddr::from(([0, 0, 0, 0], service_config.service_port));
+    let listener = TcpListener::bind(addr).unwrap();
+    let bound_addr = listener.local_addr().unwrap();
     info!("listening on {}", bound_addr);
-    (bound_addr, task)
+    (
+        bound_addr,
+        tokio::spawn(async move {
+            axum::Server::from_tcp(listener)
+                .unwrap()
+                .serve(app.into_make_service())
+                .await
+                .map_err(|e| anyhow!(e))
+        }),
+    )
 }
 
 async fn handle_error(error: BoxError) -> impl IntoResponse {

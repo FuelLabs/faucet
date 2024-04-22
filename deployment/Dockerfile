@@ -1,23 +1,3 @@
-# Stage 0: Setup Bun and build frontend
-FROM ubuntu:22.04 as frontend
-RUN apt-get update && \
-  apt-get install -y curl unzip && \
-  curl -fsSL https://bun.sh/install | bash && \
-  ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
-  apt-get remove -y curl unzip && \
-  apt-get autoremove -y && \
-  apt-get clean && \
-  rm -rf /var/lib/apt/lists/*
-
-WORKDIR /frontend
-COPY ./frontend .
-
-# Install dependencies and run build script
-RUN bun install && \
-  bun run build
-
-COPY ./static ./static
-
 # Stage 1: Build
 FROM lukemathwalker/cargo-chef:latest-rust-1.74 as chef
 WORKDIR /build/
@@ -59,7 +39,6 @@ WORKDIR /root/
 
 COPY --from=builder /build/target/release/fuel-faucet .
 COPY --from=builder /build/target/release/fuel-faucet.d .
-COPY --from=frontend /frontend/static/js ./static/js
 
 EXPOSE 3000
 

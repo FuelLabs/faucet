@@ -8,8 +8,8 @@ app:
   target_port: 3000
   human_logging: "${fuel_faucet_human_logging}"
   wallet_secret_key: "${fuel_faucet_wallet_secret_key}"
-  clerk_pub_key: "${fuel_faucet_clerk_pub_key}"
-  clerk_secret_key: "${fuel_faucet_clerk_secret_key}"
+  captcha_secret: "${fuel_faucet_captcha_secret}"
+  captcha_key: "${fuel_faucet_captcha_key}"
   node_url: "${fuel_faucet_node_url}"
   public_node_url: "${fuel_faucet_public_node_url}"
   max_dispenses_per_minute: "${fuel_faucet_max_dispenses_per_minute}"

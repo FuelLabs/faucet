@@ -1,6 +1,6 @@
 use std::fmt::{self, Display, Formatter};
 
-use axum::http::StatusCode;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -11,7 +11,8 @@ pub struct DispenseInfoResponse {
 
 #[derive(Deserialize, Debug)]
 pub struct DispenseInput {
-    pub address: Option<String>,
+    pub address: String,
+    pub captcha: String,
 }
 
 #[derive(Serialize, Debug)]
