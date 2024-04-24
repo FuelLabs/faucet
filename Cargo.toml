@@ -12,11 +12,11 @@ description = "A token faucet for onboarding fuel users"
 [dependencies]
 anyhow = "1.0"
 axum = "0.5"
-fuel-core-client = "0.22.0"
-fuel-tx = "0.43.0"
-fuel-types = "0.43.0"
-fuels-accounts = "0.54.0"
-fuels-core = "0.54.0"
+fuel-core-client = "0.24.2"
+fuel-tx = "0.48.0"
+fuel-types = "0.48.0"
+fuels-accounts = { version = "0.57.0", features = ["coin-cache"] }
+fuels-core = { version = "0.57.0" }
 handlebars = "4.2"
 lazy_static = "1.4"
 memoize = "0.3.1"
@@ -31,10 +31,11 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 [dev-dependencies]
-fuel-core = { version = "0.22.0", default-features = false }
-fuel-core-txpool = "0.22.0"
-fuel-crypto = "0.43.0"
-fuel-types = { version = "0.43.0", features = ["random"] }
+fuel-core = { version = "0.24.2", default-features = false, features = ["test-helpers"] }
+fuel-core-txpool = "0.24.2"
+fuel-crypto = "0.48.0"
+fuel-types = { version = "0.48.0", features = ["random"] }
+fuel-tx = { version = "0.48.0", features = ["test-helpers"] }
 futures = "0.3"
 insta = "1.14"
 rand = "0.8"

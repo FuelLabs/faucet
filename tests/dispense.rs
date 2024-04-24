@@ -1,14 +1,16 @@
-use fuel_core::chain_config::{ChainConfig, CoinConfig, StateConfig};
+use fuel_core::chain_config::{
+    ChainConfig, CoinConfig, CoinConfigGenerator, SnapshotReader, StateConfig,
+};
 use fuel_core::service::config::Trigger;
 use fuel_core::service::{Config as NodeConfig, FuelService};
 
 use fuel_core_client::client::pagination::{PageDirection, PaginationRequest};
+use fuel_crypto::SecretKey;
 use fuel_faucet::config::Config;
 use fuel_faucet::models::DispenseInfoResponse;
 use fuel_faucet::{start_server, Clock, THE_BIGGEST_AMOUNT};
-use fuel_tx::{ConsensusParameters, FeeParameters};
+use fuel_tx::ConsensusParameters;
 use fuel_types::{Address, AssetId};
-use fuels_accounts::fuel_crypto::SecretKey;
 use fuels_accounts::provider::Provider;
 use fuels_accounts::wallet::WalletUnlocked;
 use fuels_core::types::bech32::Bech32Address;
@@ -59,63 +61,54 @@ impl TestContext {
         let secret_key: SecretKey = SecretKey::random(&mut rng);
         let wallet = WalletUnlocked::new_from_private_key(secret_key, None);
 
+        let mut generator = CoinConfigGenerator::new();
         let mut coins: Vec<_> = (0..10000)
             .map(|_| {
                 // dust
                 CoinConfig {
-                    tx_id: None,
-                    output_index: None,
-                    maturity: None,
-                    tx_pointer_block_height: None,
-                    tx_pointer_tx_idx: None,
                     owner: wallet.address().into(),
                     amount: THE_BIGGEST_AMOUNT - 1,
                     asset_id: rng.gen(),
+                    ..generator.generate()
                 }
             })
             .collect();
         // main coin
         coins.push(CoinConfig {
-            tx_id: None,
-            output_index: None,
-            maturity: None,
-            tx_pointer_block_height: None,
-            tx_pointer_tx_idx: None,
             owner: wallet.address().into(),
             amount: 1 << 50,
             asset_id: Default::default(),
+            ..generator.generate()
         });
 
-        // start node
-        let fuel_node = FuelService::new_node(NodeConfig {
-            chain_conf: ChainConfig {
-                initial_state: Some(StateConfig {
-                    coins: Some(coins),
-                    contracts: None,
-                    height: None,
-                    messages: None,
-                }),
-                consensus_parameters: ConsensusParameters {
-                    fee_params: FeeParameters {
-                        gas_price_factor: 1,
-                        ..Default::default()
-                    },
-                    ..ConsensusParameters::default()
-                },
-                ..ChainConfig::local_testnet()
-            },
+        let state_config = StateConfig {
+            coins,
+            ..Default::default()
+        };
+
+        let mut consensus_parameters = ConsensusParameters::default();
+        consensus_parameters
+            .set_fee_params(fuel_tx::FeeParameters::default().with_gas_price_factor(1));
+
+        let chain_config = ChainConfig {
+            consensus_parameters,
+            ..ChainConfig::local_testnet()
+        };
+
+        let snapshot_reader = SnapshotReader::new_in_memory(chain_config, state_config);
+
+        let config = NodeConfig {
             block_production: Trigger::Interval {
                 block_time: Duration::from_secs(3),
             },
-            txpool: fuel_core_txpool::Config {
-                min_gas_price: 1,
-                ..Default::default()
-            },
             utxo_validation: true,
+            static_gas_price: 1,
+            snapshot_reader,
             ..NodeConfig::local_node()
-        })
-        .await
-        .unwrap();
+        };
+
+        // start node
+        let fuel_node = FuelService::new_node(config).await.unwrap();
 
         // setup provider
         let provider = Provider::connect(&fuel_node.bound_address.to_string())
