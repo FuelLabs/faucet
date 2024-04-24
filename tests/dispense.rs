@@ -122,7 +122,6 @@ impl TestContext {
             wallet_secret_key: Some(Secret::new(format!("{secret_key:x}"))),
             dispense_amount,
             dispense_asset_id: AssetId::default(),
-            min_gas_price: 1,
             ..Default::default()
         };
 

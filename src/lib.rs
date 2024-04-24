@@ -53,7 +53,6 @@ pub struct CoinOutput {
 
 #[derive(Debug)]
 pub struct FaucetState {
-    min_gas_price: u64,
     max_depth: u64,
     // Gas prices create the ordering for transactions.
     next_tip: u64,
@@ -61,9 +60,8 @@ pub struct FaucetState {
 }
 
 impl FaucetState {
-    pub fn new(min_gas_price: u64, node_info: &NodeInfo) -> Self {
+    pub fn new(node_info: &NodeInfo) -> Self {
         Self {
-            min_gas_price,
             max_depth: node_info.max_depth,
             next_tip: 0,
             last_output: None,
@@ -71,8 +69,8 @@ impl FaucetState {
     }
 
     pub fn next_tip(&mut self) -> u64 {
-        if self.next_tip <= self.min_gas_price {
-            self.next_tip = self.max_depth * 100 + self.min_gas_price;
+        if self.next_tip == 0 {
+            self.next_tip = self.max_depth * 10_000;
         }
         let next_tip = self.next_tip;
         self.next_tip -= 1;
@@ -160,7 +158,7 @@ pub async fn start_server(
                 .layer(Extension(Arc::new(wallet)))
                 .layer(Extension(Arc::new(client)))
                 .layer(Extension(Arc::new(tokio::sync::Mutex::new(
-                    FaucetState::new(service_config.min_gas_price, &node_info.into()),
+                    FaucetState::new(&node_info.into()),
                 ))))
                 .layer(Extension(Arc::new(service_config.clone())))
                 .layer(Extension(Arc::new(Mutex::new(DispenseTracker::new(clock)))))
