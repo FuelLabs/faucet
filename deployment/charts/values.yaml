@@ -14,7 +14,6 @@ app:
   public_node_url: "${fuel_faucet_public_node_url}"
   max_dispenses_per_minute: "${fuel_faucet_max_dispenses_per_minute}"
   dispense_amount: "${fuel_faucet_dispense_amount}"
-  min_gas_price: "${fuel_faucet_min_gas_price}"
   image:
     repository: "${fuel_faucet_image_repository}"
     tag: "${fuel_faucet_image_tag}"

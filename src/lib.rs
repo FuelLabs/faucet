@@ -17,7 +17,6 @@ use fuel_tx::UtxoId;
 use fuel_types::Address;
 use fuels_accounts::{provider::Provider, wallet::WalletUnlocked, ViewOnlyAccount};
 use fuels_core::types::node_info::NodeInfo;
-use fuels_core::types::transaction_builders::NetworkInfo;
 use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
 use std::{
@@ -45,12 +44,6 @@ mod routes;
 pub use dispense_tracker::{Clock, StdTime};
 pub use routes::THE_BIGGEST_AMOUNT;
 
-#[derive(Debug)]
-pub struct NetworkConfig {
-    pub network_info: NetworkInfo,
-    pub node_info: NodeInfo,
-}
-
 #[derive(Debug, Copy, Clone)]
 pub struct CoinOutput {
     utxo_id: UtxoId,
@@ -60,37 +53,34 @@ pub struct CoinOutput {
 
 #[derive(Debug)]
 pub struct FaucetState {
-    min_gas_price: u64,
     max_depth: u64,
     // Gas prices create the ordering for transactions.
-    next_gas_price: u64,
+    next_tip: u64,
     pub last_output: Option<CoinOutput>,
 }
 
 impl FaucetState {
-    pub fn new(min_gas_price: u64, node_info: &NodeInfo) -> Self {
+    pub fn new(node_info: &NodeInfo) -> Self {
         Self {
-            min_gas_price,
             max_depth: node_info.max_depth,
-            next_gas_price: 0,
+            next_tip: 0,
             last_output: None,
         }
     }
 
-    pub fn next_gas_price(&mut self) -> u64 {
-        if self.next_gas_price <= self.min_gas_price {
-            self.next_gas_price = self.max_depth * 100 + self.min_gas_price;
+    pub fn next_tip(&mut self) -> u64 {
+        if self.next_tip == 0 {
+            self.next_tip = self.max_depth * 10_000;
         }
-        let next_gas_price = self.next_gas_price;
-        self.next_gas_price -= 1;
-        next_gas_price
+        let next_tip = self.next_tip;
+        self.next_tip -= 1;
+        next_tip
     }
 }
 
 pub type SharedFaucetState = Arc<tokio::sync::Mutex<FaucetState>>;
 pub type SharedWallet = Arc<WalletUnlocked>;
 pub type SharedConfig = Arc<Config>;
-pub type SharedNetworkConfig = Arc<NetworkConfig>;
 pub type SharedDispenseTracker = Arc<Mutex<DispenseTracker>>;
 
 pub async fn start_server(
@@ -103,22 +93,10 @@ pub async fn start_server(
     let client = FuelClient::new(service_config.node_url.clone())
         .expect("unable to connect to the fuel node api");
 
-    let chain_info = client.chain_info().await.expect("Can't get `chain_info`");
-    let provider = Provider::new(
-        service_config.node_url.clone(),
-        chain_info.consensus_parameters.clone(),
-    )
-    .expect("Should create a provider");
-
-    let node_info = provider
-        .node_info()
+    let node_info = client.node_info().await.expect("Unable to fetch node info");
+    let provider = Provider::connect(service_config.node_url.clone())
         .await
-        .expect("unable to get `node_info`");
-
-    let network_config = NetworkConfig {
-        network_info: NetworkInfo::new(node_info.clone(), chain_info.into()),
-        node_info,
-    };
+        .expect("Should create a provider");
 
     // setup wallet
     let secret = service_config
@@ -165,7 +143,7 @@ pub async fn start_server(
                 ServiceBuilder::new()
                     .layer(HandleErrorLayer::new(handle_error))
                     .buffer(MAX_CONCURRENT_REQUESTS)
-                    .concurrency_limit(network_config.node_info.max_depth as usize)
+                    .concurrency_limit(node_info.max_depth as usize)
                     .into_inner(),
             ),
         )
@@ -180,10 +158,9 @@ pub async fn start_server(
                 .layer(Extension(Arc::new(wallet)))
                 .layer(Extension(Arc::new(client)))
                 .layer(Extension(Arc::new(tokio::sync::Mutex::new(
-                    FaucetState::new(service_config.min_gas_price, &network_config.node_info),
+                    FaucetState::new(&node_info.into()),
                 ))))
                 .layer(Extension(Arc::new(service_config.clone())))
-                .layer(Extension(Arc::new(network_config)))
                 .layer(Extension(Arc::new(Mutex::new(DispenseTracker::new(clock)))))
                 .layer(
                     CorsLayer::new()

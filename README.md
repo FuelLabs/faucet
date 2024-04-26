@@ -20,7 +20,6 @@ The faucet makes use of environment variables for configuration.
 | PUBLIC_FUEL_NODE_URL | The public GraphQL endpoint for connecting to fuel-core. Ex.: https://node.fuel.network/graphql |
 | SERVICE_PORT         | The port the service will listen for http connections on.               |
 | DISPENSE_AMOUNT      | Dispense amount on each faucet                                          |
-| MIN_GAS_PRICE        | The minimum gas price to use in each transfer                           |
 
 ## Build and Run
 

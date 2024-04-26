@@ -1,6 +1,6 @@
 use crate::{
     models::*, recaptcha, CoinOutput, SharedConfig, SharedDispenseTracker, SharedFaucetState,
-    SharedNetworkConfig, SharedWallet,
+    SharedWallet,
 };
 use axum::{
     response::{Html, IntoResponse, Response},
@@ -8,11 +8,11 @@ use axum::{
 };
 
 use fuel_core_client::client::FuelClient;
-use fuel_tx::UtxoId;
+use fuel_tx::{Output, UtxoId};
 use fuel_types::{Address, AssetId, Bytes32};
-use fuels_accounts::{wallet::WalletUnlocked, Account, Signer, ViewOnlyAccount};
+use fuels_accounts::{wallet::WalletUnlocked, Account, ViewOnlyAccount};
 use fuels_core::types::transaction::{Transaction, TxPolicies};
-use fuels_core::types::transaction_builders::BuildableTransaction;
+use fuels_core::types::transaction_builders::{BuildableTransaction, TransactionBuilder};
 use fuels_core::types::{
     bech32::Bech32Address,
     coin::{Coin, CoinStatus},
@@ -146,11 +146,8 @@ fn check_and_mark_dispense_limit(
     Ok(())
 }
 
-async fn get_coin_output(
-    wallet: &WalletUnlocked,
-    amount: u64,
-) -> Result<CoinOutput, DispenseError> {
-    let resources = wallet
+async fn get_coins(wallet: &WalletUnlocked, amount: u64) -> Result<Vec<Input>, DispenseError> {
+    wallet
         .get_spendable_resources(AssetId::BASE, amount)
         .await
         .map_err(|e| {
@@ -158,27 +155,8 @@ async fn get_coin_output(
                 format!("Failed to get resources: {e}"),
                 StatusCode::INTERNAL_SERVER_ERROR,
             )
-        })?;
-
-    let coin_output = resources
-        .into_iter()
-        .filter_map(|coin| match coin {
-            CoinType::Coin(coin) => Some(CoinOutput {
-                utxo_id: coin.utxo_id,
-                owner: coin.owner.into(),
-                amount: coin.amount,
-            }),
-            _ => None,
         })
-        .last()
-        .ok_or_else(|| {
-            error(
-                "The wallet is empty".to_string(),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            )
-        })?;
-
-    Ok(coin_output)
+        .map(|resources| resources.into_iter().map(Input::resource_signed).collect())
 }
 
 async fn submit_tx_with_timeout(
@@ -216,7 +194,6 @@ pub async fn dispense_tokens(
     Extension(state): Extension<SharedFaucetState>,
     Extension(config): Extension<SharedConfig>,
     Extension(client): Extension<Arc<FuelClient>>,
-    Extension(network_config): Extension<SharedNetworkConfig>,
     Extension(dispense_tracker): Extension<SharedDispenseTracker>,
 ) -> Result<DispenseResponse, DispenseError> {
     // parse deposit address
@@ -272,48 +249,78 @@ pub async fn dispense_tokens(
     let mut tx_id = None;
     for _ in 0..5 {
         let mut guard = state.lock().await;
-        let coin_output = if let Some(previous_coin_output) = &guard.last_output {
-            *previous_coin_output
+        let inputs = if let Some(previous_coin_output) = &guard.last_output {
+            let coin_type = CoinType::Coin(Coin {
+                amount: previous_coin_output.amount,
+                block_created: 0u32,
+                asset_id: config.dispense_asset_id,
+                utxo_id: previous_coin_output.utxo_id,
+                owner: previous_coin_output.owner.into(),
+                status: CoinStatus::Unspent,
+            });
+
+            vec![Input::resource_signed(coin_type)]
         } else {
-            get_coin_output(&wallet, config.dispense_amount).await?
+            get_coins(&wallet, config.dispense_amount).await?
         };
 
-        let coin_type = CoinType::Coin(Coin {
-            amount: coin_output.amount,
-            block_created: 0u32,
-            asset_id: config.dispense_asset_id,
-            utxo_id: coin_output.utxo_id,
-            maturity: 0u32,
-            owner: coin_output.owner.into(),
-            status: CoinStatus::Unspent,
-        });
-
-        let inputs = vec![Input::resource_signed(coin_type)];
-
-        let outputs = wallet.get_asset_outputs_for_amount(
+        let mut outputs = wallet.get_asset_outputs_for_amount(
             &address.into(),
             config.dispense_asset_id,
             config.dispense_amount,
         );
+        let faucet_address: Address = wallet.address().into();
+        // Add an additional output to store the stable part of the fee change.
+        outputs.push(Output::coin(faucet_address, 0, config.dispense_asset_id));
 
-        let gas_price = guard.next_gas_price();
+        let tip = guard.next_tip();
 
-        let mut script = ScriptTransactionBuilder::prepare_transfer(
+        let mut tx_builder = ScriptTransactionBuilder::prepare_transfer(
             inputs,
             outputs,
-            TxPolicies::default().with_gas_price(gas_price),
-            network_config.network_info.clone(),
+            TxPolicies::default().with_tip(tip),
         );
 
-        wallet.sign_transaction(&mut script);
+        wallet
+            .add_witnesses(&mut tx_builder)
+            .expect("Valid witness");
+        wallet
+            .adjust_for_fee(&mut tx_builder, config.dispense_amount)
+            .await
+            .map_err(|e| {
+                error(
+                    format!("Failed to adjust for fee: {e}"),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                )
+            })?;
 
-        let script = script.build(provider).await.expect("valid script");
+        let fee = tx_builder
+            .fee_checked_from_tx(provider)
+            .await
+            .map_err(|e| {
+                error(
+                    format!("Error calculating `TransactionFee`: {e}"),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                )
+            })?
+            .ok_or(error(
+                "Overflow during calculating `TransactionFee`".to_string(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            ))?;
+        let available_balance = available_balance(&tx_builder.inputs, &config.dispense_asset_id);
+        let stable_fee_change = available_balance
+            .checked_sub(fee.max_fee().saturating_add(config.dispense_amount))
+            .ok_or(error(
+                "Not enough asset to cover a max fee".to_string(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            ))?;
 
-        let total_fee = script
-            .fee_checked_from_tx(&network_config.network_info.consensus_parameters)
-            .expect("Should be able to calculate fee");
+        *tx_builder.outputs.last_mut().unwrap() =
+            Output::coin(faucet_address, stable_fee_change, config.dispense_asset_id);
 
-        let id = script.id(network_config.network_info.consensus_parameters.chain_id);
+        let script = tx_builder.build(provider).await.expect("Valid script");
+
+        let id = script.id(provider.chain_id());
         let result = tokio::time::timeout(
             Duration::from_secs(config.timeout),
             provider.send_transaction(script),
@@ -340,9 +347,9 @@ pub async fn dispense_tokens(
         match result {
             Ok(_) => {
                 guard.last_output = Some(CoinOutput {
-                    utxo_id: UtxoId::new(id, 1),
-                    owner: coin_output.owner,
-                    amount: coin_output.amount - total_fee.min_fee() - config.dispense_amount,
+                    utxo_id: UtxoId::new(id, 2),
+                    owner: faucet_address,
+                    amount: stable_fee_change,
                 });
                 tx_id = Some(id);
                 break;
@@ -391,4 +398,22 @@ pub async fn dispense_info(
 fn error(error: String, status: StatusCode) -> DispenseError {
     error!("{}", error);
     DispenseError { error, status }
+}
+
+fn available_balance(inputs: &[Input], base_asset_id: &AssetId) -> u64 {
+    inputs
+        .iter()
+        .filter_map(|input| match input {
+            Input::ResourceSigned { resource, .. } | Input::ResourcePredicate { resource, .. } => {
+                match resource {
+                    CoinType::Coin(Coin {
+                        amount, asset_id, ..
+                    }) if asset_id == base_asset_id => Some(*amount),
+                    CoinType::Message(message) => Some(message.amount),
+                    _ => None,
+                }
+            }
+            _ => None,
+        })
+        .sum()
 }
