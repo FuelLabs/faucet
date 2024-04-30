@@ -15,8 +15,8 @@ axum = "0.5"
 fuel-core-client = "0.24.3"
 fuel-tx = "0.48.0"
 fuel-types = "0.48.0"
-fuels-accounts = { version = "0.58.0", features = ["coin-cache"] }
-fuels-core = { version = "0.58.0" }
+fuels-accounts = { version = "0.59.0", features = ["coin-cache"] }
+fuels-core = { version = "0.59.0" }
 handlebars = "4.2"
 lazy_static = "1.4"
 memoize = "0.3.1"
