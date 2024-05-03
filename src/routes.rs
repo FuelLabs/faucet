@@ -146,9 +146,13 @@ fn check_and_mark_dispense_limit(
     Ok(())
 }
 
-async fn get_coins(wallet: &WalletUnlocked, amount: u64) -> Result<Vec<Input>, DispenseError> {
+async fn get_coins(
+    wallet: &WalletUnlocked,
+    base_asset_id: &AssetId,
+    amount: u64,
+) -> Result<Vec<Input>, DispenseError> {
     wallet
-        .get_spendable_resources(AssetId::BASE, amount)
+        .get_spendable_resources(*base_asset_id, amount)
         .await
         .map_err(|e| {
             error(
@@ -245,6 +249,7 @@ pub async fn dispense_tokens(
     });
 
     let provider = wallet.provider().expect("client provider");
+    let base_asset_id = *provider.consensus_parameters().base_asset_id();
 
     let mut tx_id = None;
     for _ in 0..5 {
@@ -253,7 +258,7 @@ pub async fn dispense_tokens(
             let coin_type = CoinType::Coin(Coin {
                 amount: previous_coin_output.amount,
                 block_created: 0u32,
-                asset_id: config.dispense_asset_id,
+                asset_id: base_asset_id,
                 utxo_id: previous_coin_output.utxo_id,
                 owner: previous_coin_output.owner.into(),
                 status: CoinStatus::Unspent,
@@ -261,17 +266,17 @@ pub async fn dispense_tokens(
 
             vec![Input::resource_signed(coin_type)]
         } else {
-            get_coins(&wallet, config.dispense_amount).await?
+            get_coins(&wallet, &base_asset_id, config.dispense_amount).await?
         };
 
         let mut outputs = wallet.get_asset_outputs_for_amount(
             &address.into(),
-            config.dispense_asset_id,
+            base_asset_id,
             config.dispense_amount,
         );
         let faucet_address: Address = wallet.address().into();
         // Add an additional output to store the stable part of the fee change.
-        outputs.push(Output::coin(faucet_address, 0, config.dispense_asset_id));
+        outputs.push(Output::coin(faucet_address, 0, base_asset_id));
 
         let tip = guard.next_tip();
 
@@ -307,7 +312,7 @@ pub async fn dispense_tokens(
                 "Overflow during calculating `TransactionFee`".to_string(),
                 StatusCode::INTERNAL_SERVER_ERROR,
             ))?;
-        let available_balance = available_balance(&tx_builder.inputs, &config.dispense_asset_id);
+        let available_balance = available_balance(&tx_builder.inputs, &base_asset_id);
         let stable_fee_change = available_balance
             .checked_sub(fee.max_fee().saturating_add(config.dispense_amount))
             .ok_or(error(
@@ -316,7 +321,7 @@ pub async fn dispense_tokens(
             ))?;
 
         *tx_builder.outputs.last_mut().unwrap() =
-            Output::coin(faucet_address, stable_fee_change, config.dispense_asset_id);
+            Output::coin(faucet_address, stable_fee_change, base_asset_id);
 
         let script = tx_builder.build(provider).await.expect("Valid script");
 
@@ -388,10 +393,14 @@ pub async fn dispense_tokens(
 #[tracing::instrument(skip_all)]
 pub async fn dispense_info(
     Extension(config): Extension<SharedConfig>,
+    Extension(wallet): Extension<SharedWallet>,
 ) -> Result<DispenseInfoResponse, DispenseError> {
+    let provider = wallet.provider().expect("client provider");
+    let base_asset_id = *provider.consensus_parameters().base_asset_id();
+
     Ok(DispenseInfoResponse {
         amount: config.dispense_amount,
-        asset_id: config.dispense_asset_id.to_string(),
+        asset_id: base_asset_id.to_string(),
     })
 }
 

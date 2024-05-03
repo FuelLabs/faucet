@@ -97,6 +97,7 @@ pub async fn start_server(
     let provider = Provider::connect(service_config.node_url.clone())
         .await
         .expect("Should create a provider");
+    let base_asset_id = *provider.consensus_parameters().base_asset_id();
 
     // setup wallet
     let secret = service_config
@@ -112,7 +113,7 @@ pub async fn start_server(
     );
 
     let balance = wallet
-        .get_coins(service_config.dispense_asset_id)
+        .get_coins(base_asset_id)
         .await
         .expect("Failed to fetch initial balance from fuel core")
         .into_iter()

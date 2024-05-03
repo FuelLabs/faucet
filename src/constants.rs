@@ -1,5 +1,3 @@
-use fuels_core::types::AssetId;
-
 pub const LOG_FILTER: &str = "RUST_LOG";
 pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
 pub const CAPTCHA_KEY: &str = "CAPTCHA_KEY";
@@ -14,7 +12,6 @@ pub const DISPENSE_AMOUNT: &str = "DISPENSE_AMOUNT";
 pub const DISPENSE_INTERVAL: &str = "DISPENSE_LIMIT_INTERVAL";
 pub const DEFAULT_DISPENSE_INTERVAL: u64 = 24 * 60 * 60;
 pub const DEFAULT_FAUCET_DISPENSE_AMOUNT: u64 = 10_000_000;
-pub const FAUCET_ASSET_ID: AssetId = AssetId::new([0; 32]);
 pub const SERVICE_PORT: &str = "PORT";
 pub const DEFAULT_PORT: u16 = 3000;
 
