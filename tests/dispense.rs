@@ -10,7 +10,7 @@ use fuel_faucet::config::Config;
 use fuel_faucet::models::DispenseInfoResponse;
 use fuel_faucet::{start_server, Clock, THE_BIGGEST_AMOUNT};
 use fuel_tx::ConsensusParameters;
-use fuel_types::{Address, AssetId};
+use fuel_types::Address;
 use fuels_accounts::provider::Provider;
 use fuels_accounts::wallet::WalletUnlocked;
 use fuels_core::types::bech32::Bech32Address;
@@ -60,6 +60,7 @@ impl TestContext {
         let dispense_amount = rng.gen_range(1..10000u64);
         let secret_key: SecretKey = SecretKey::random(&mut rng);
         let wallet = WalletUnlocked::new_from_private_key(secret_key, None);
+        let base_asset_id = [1; 32].into();
 
         let mut generator = CoinConfigGenerator::new();
         let mut coins: Vec<_> = (0..10000)
@@ -77,7 +78,7 @@ impl TestContext {
         coins.push(CoinConfig {
             owner: wallet.address().into(),
             amount: 1 << 50,
-            asset_id: Default::default(),
+            asset_id: base_asset_id,
             ..generator.generate()
         });
 
@@ -89,6 +90,7 @@ impl TestContext {
         let mut consensus_parameters = ConsensusParameters::default();
         consensus_parameters
             .set_fee_params(fuel_tx::FeeParameters::default().with_gas_price_factor(1));
+        consensus_parameters.set_base_asset_id(base_asset_id);
 
         let chain_config = ChainConfig {
             consensus_parameters,
@@ -121,7 +123,6 @@ impl TestContext {
             node_url: format!("http://{}", fuel_node.bound_address),
             wallet_secret_key: Some(Secret::new(format!("{secret_key:x}"))),
             dispense_amount,
-            dispense_asset_id: AssetId::default(),
             ..Default::default()
         };
 
@@ -157,7 +158,11 @@ async fn can_start_server() {
     assert_eq!(response.amount, context.faucet_config.dispense_amount);
     assert_eq!(
         response.asset_id,
-        context.faucet_config.dispense_asset_id.to_string()
+        context
+            .provider
+            .consensus_parameters()
+            .base_asset_id()
+            .to_string()
     );
 }
 
@@ -208,7 +213,10 @@ async fn _dispense_sends_coins_to_valid_address(
 
     let test_balance: u64 = context
         .provider
-        .get_coins(&recipient_address, context.faucet_config.dispense_asset_id)
+        .get_coins(
+            &recipient_address,
+            *context.provider.consensus_parameters().base_asset_id(),
+        )
         .await
         .unwrap()
         .iter()
