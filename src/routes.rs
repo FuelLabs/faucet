@@ -276,7 +276,7 @@ pub async fn dispense_tokens(
             .await?
         };
 
-        let recipient_address: Address = address.into();
+        let recipient_address = address;
         let faucet_address: Address = wallet.address().into();
         let outputs = vec![
             Output::coin(recipient_address, config.dispense_amount, base_asset_id),

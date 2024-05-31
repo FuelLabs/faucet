@@ -83,7 +83,7 @@ impl DispenseTracker {
     }
 
     pub fn has_tracked(&self, address: &Address) -> bool {
-        self.tracked.get(address).is_some()
+        self.tracked.contains_key(address)
     }
 
     pub fn is_in_progress(&self, address: &Address) -> bool {
