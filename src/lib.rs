@@ -42,7 +42,6 @@ mod recaptcha;
 mod routes;
 
 pub use dispense_tracker::{Clock, StdTime};
-pub use routes::THE_BIGGEST_AMOUNT;
 
 #[derive(Debug, Copy, Clone)]
 pub struct CoinOutput {
@@ -158,6 +157,7 @@ pub async fn start_server(
                 .layer(TraceLayer::new_for_http())
                 .layer(Extension(Arc::new(wallet)))
                 .layer(Extension(Arc::new(client)))
+                .layer(Extension(Arc::new(node_info.clone())))
                 .layer(Extension(Arc::new(tokio::sync::Mutex::new(
                     FaucetState::new(&node_info.into()),
                 ))))

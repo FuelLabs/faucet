@@ -7,6 +7,7 @@ use axum::{
     Extension, Json,
 };
 
+use fuel_core_client::client::types::NodeInfo;
 use fuel_core_client::client::FuelClient;
 use fuel_tx::{Output, UtxoId};
 use fuel_types::{Address, AssetId, Bytes32};
@@ -31,9 +32,6 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use tracing::{error, info};
-
-// The amount to fetch the biggest input of the faucet.
-pub const THE_BIGGEST_AMOUNT: u64 = u32::MAX as u64;
 
 lazy_static::lazy_static! {
     static ref START_TIME: u64 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
@@ -197,6 +195,7 @@ pub async fn dispense_tokens(
     Extension(wallet): Extension<SharedWallet>,
     Extension(state): Extension<SharedFaucetState>,
     Extension(config): Extension<SharedConfig>,
+    Extension(info_node): Extension<Arc<NodeInfo>>,
     Extension(client): Extension<Arc<FuelClient>>,
     Extension(dispense_tracker): Extension<SharedDispenseTracker>,
 ) -> Result<DispenseResponse, DispenseError> {
@@ -252,9 +251,11 @@ pub async fn dispense_tokens(
     let base_asset_id = *provider.consensus_parameters().base_asset_id();
 
     let mut tx_id = None;
-    for _ in 0..5 {
+    for _ in 0..config.number_of_retries {
         let mut guard = state.lock().await;
-        let inputs = if let Some(previous_coin_output) = &guard.last_output {
+        let amount = guard.last_output.as_ref().map_or(0, |o| o.amount);
+        let inputs = if amount > config.dispense_amount {
+            let previous_coin_output = guard.last_output.expect("Checked above");
             let coin_type = CoinType::Coin(Coin {
                 amount: previous_coin_output.amount,
                 block_created: 0u32,
@@ -266,17 +267,24 @@ pub async fn dispense_tokens(
 
             vec![Input::resource_signed(coin_type)]
         } else {
-            get_coins(&wallet, &base_asset_id, config.dispense_amount).await?
+            get_coins(
+                &wallet,
+                &base_asset_id,
+                // Double the target amount to cover also the fee
+                config.dispense_amount * info_node.max_depth * 2,
+            )
+            .await?
         };
 
-        let mut outputs = wallet.get_asset_outputs_for_amount(
-            &address.into(),
-            base_asset_id,
-            config.dispense_amount,
-        );
+        let recipient_address = address;
         let faucet_address: Address = wallet.address().into();
-        // Add an additional output to store the stable part of the fee change.
-        outputs.push(Output::coin(faucet_address, 0, base_asset_id));
+        let outputs = vec![
+            Output::coin(recipient_address, config.dispense_amount, base_asset_id),
+            // Sends the dust change to the user
+            Output::change(recipient_address, 0, base_asset_id),
+            // Add an additional output to store the stable part of the fee change.
+            Output::coin(faucet_address, 0, base_asset_id),
+        ];
 
         let tip = guard.next_tip();
 
@@ -308,17 +316,21 @@ pub async fn dispense_tokens(
                     StatusCode::INTERNAL_SERVER_ERROR,
                 )
             })?
-            .ok_or(error(
-                "Overflow during calculating `TransactionFee`".to_string(),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            ))?;
+            .ok_or_else(|| {
+                error(
+                    "Overflow during calculating `TransactionFee`".to_string(),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                )
+            })?;
         let available_balance = available_balance(&tx_builder.inputs, &base_asset_id);
         let stable_fee_change = available_balance
             .checked_sub(fee.max_fee().saturating_add(config.dispense_amount))
-            .ok_or(error(
-                "Not enough asset to cover a max fee".to_string(),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            ))?;
+            .ok_or_else(|| {
+                error(
+                    "Not enough asset to cover a max fee".to_string(),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                )
+            })?;
 
         *tx_builder.outputs.last_mut().unwrap() =
             Output::coin(faucet_address, stable_fee_change, base_asset_id);
