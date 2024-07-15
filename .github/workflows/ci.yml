@@ -6,13 +6,13 @@ on:
       - master
   pull_request:
   release:
-    types: [published]
+    types: [ published ]
 
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
   REGISTRY: ghcr.io
-  RUST_VERSION: 1.74.0
+  RUST_VERSION: 1.76.0
 
 jobs:
   cancel-previous-runs:

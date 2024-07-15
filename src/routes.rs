@@ -1,18 +1,19 @@
 use crate::{
     models::*, recaptcha, CoinOutput, SharedConfig, SharedDispenseTracker, SharedFaucetState,
-    SharedNetworkConfig, SharedWallet,
+    SharedWallet,
 };
 use axum::{
     response::{Html, IntoResponse, Response},
     Extension, Json,
 };
 
+use fuel_core_client::client::types::NodeInfo;
 use fuel_core_client::client::FuelClient;
-use fuel_tx::UtxoId;
+use fuel_tx::{Output, UtxoId};
 use fuel_types::{Address, AssetId, Bytes32};
-use fuels_accounts::{wallet::WalletUnlocked, Account, Signer, ViewOnlyAccount};
+use fuels_accounts::{wallet::WalletUnlocked, Account, ViewOnlyAccount};
 use fuels_core::types::transaction::{Transaction, TxPolicies};
-use fuels_core::types::transaction_builders::BuildableTransaction;
+use fuels_core::types::transaction_builders::{BuildableTransaction, TransactionBuilder};
 use fuels_core::types::{
     bech32::Bech32Address,
     coin::{Coin, CoinStatus},
@@ -31,9 +32,6 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use tracing::{error, info};
-
-// The amount to fetch the biggest input of the faucet.
-pub const THE_BIGGEST_AMOUNT: u64 = u32::MAX as u64;
 
 lazy_static::lazy_static! {
     static ref START_TIME: u64 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
@@ -64,7 +62,7 @@ pub async fn main(Extension(config): Extension<SharedConfig>) -> Html<String> {
     Html(render_page(public_node_url, captcha_key))
 }
 
-#[tracing::instrument(skip(wallet))]
+#[tracing::instrument(skip_all)]
 pub async fn health(Extension(wallet): Extension<SharedWallet>) -> Response {
     // ping client for health
     let client = wallet
@@ -135,43 +133,32 @@ fn check_and_mark_dispense_limit(
         ));
     }
 
+    if tracker.is_in_progress(&address) {
+        return Err(error(
+            "Account is already in the process of receiving assets".to_string(),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
     tracker.mark_in_progress(address);
     Ok(())
 }
 
-async fn get_coin_output(
+async fn get_coins(
     wallet: &WalletUnlocked,
+    base_asset_id: &AssetId,
     amount: u64,
-) -> Result<CoinOutput, DispenseError> {
-    let resources = wallet
-        .get_spendable_resources(AssetId::BASE, amount)
+) -> Result<Vec<Input>, DispenseError> {
+    wallet
+        .get_spendable_resources(*base_asset_id, amount)
         .await
         .map_err(|e| {
             error(
                 format!("Failed to get resources: {e}"),
                 StatusCode::INTERNAL_SERVER_ERROR,
             )
-        })?;
-
-    let coin_output = resources
-        .into_iter()
-        .filter_map(|coin| match coin {
-            CoinType::Coin(coin) => Some(CoinOutput {
-                utxo_id: coin.utxo_id,
-                owner: coin.owner.into(),
-                amount: coin.amount,
-            }),
-            _ => None,
         })
-        .last()
-        .ok_or_else(|| {
-            error(
-                "The wallet is empty".to_string(),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            )
-        })?;
-
-    Ok(coin_output)
+        .map(|resources| resources.into_iter().map(Input::resource_signed).collect())
 }
 
 async fn submit_tx_with_timeout(
@@ -202,14 +189,14 @@ async fn submit_tx_with_timeout(
     Ok(())
 }
 
-#[tracing::instrument(skip(wallet, config))]
+#[tracing::instrument(skip_all)]
 pub async fn dispense_tokens(
     Json(input): Json<DispenseInput>,
     Extension(wallet): Extension<SharedWallet>,
     Extension(state): Extension<SharedFaucetState>,
     Extension(config): Extension<SharedConfig>,
+    Extension(info_node): Extension<Arc<NodeInfo>>,
     Extension(client): Extension<Arc<FuelClient>>,
-    Extension(network_config): Extension<SharedNetworkConfig>,
     Extension(dispense_tracker): Extension<SharedDispenseTracker>,
 ) -> Result<DispenseResponse, DispenseError> {
     // parse deposit address
@@ -238,131 +225,216 @@ pub async fn dispense_tokens(
     }
 
     check_and_mark_dispense_limit(&dispense_tracker, address, config.dispense_limit_interval)?;
-    let cleanup = || {
+
+    struct CleanUpper<Fn>(Fn)
+    where
+        Fn: FnMut();
+
+    impl<Fn> Drop for CleanUpper<Fn>
+    where
+        Fn: FnMut(),
+    {
+        fn drop(&mut self) {
+            self.0();
+        }
+    }
+
+    // We want to remove the address from `in_progress` regardless of the outcome of the transaction.
+    let _cleanup = CleanUpper(|| {
         dispense_tracker
             .lock()
             .unwrap()
             .remove_in_progress(&address);
-    };
+    });
 
     let provider = wallet.provider().expect("client provider");
-    let mut tx_id;
+    let base_asset_id = *provider.consensus_parameters().base_asset_id();
 
-    loop {
+    let mut tx_id = None;
+    for _ in 0..config.number_of_retries {
         let mut guard = state.lock().await;
-        let coin_output = if let Some(previous_coin_output) = &guard.last_output {
-            *previous_coin_output
+        let amount = guard.last_output.as_ref().map_or(0, |o| o.amount);
+        let inputs = if amount > config.dispense_amount {
+            let previous_coin_output = guard.last_output.expect("Checked above");
+            let coin_type = CoinType::Coin(Coin {
+                amount: previous_coin_output.amount,
+                block_created: 0u32,
+                asset_id: base_asset_id,
+                utxo_id: previous_coin_output.utxo_id,
+                owner: previous_coin_output.owner.into(),
+                status: CoinStatus::Unspent,
+            });
+
+            vec![Input::resource_signed(coin_type)]
         } else {
-            get_coin_output(&wallet, config.dispense_amount)
-                .await
-                .map_err(|e| {
-                    cleanup();
-                    e
-                })?
+            get_coins(
+                &wallet,
+                &base_asset_id,
+                // Double the target amount to cover also the fee
+                config.dispense_amount * info_node.max_depth * 2,
+            )
+            .await?
         };
 
-        let coin_type = CoinType::Coin(Coin {
-            amount: coin_output.amount,
-            block_created: 0u32,
-            asset_id: config.dispense_asset_id,
-            utxo_id: coin_output.utxo_id,
-            maturity: 0u32,
-            owner: coin_output.owner.into(),
-            status: CoinStatus::Unspent,
-        });
+        let recipient_address = address;
+        let faucet_address: Address = wallet.address().into();
+        let outputs = vec![
+            Output::coin(recipient_address, config.dispense_amount, base_asset_id),
+            // Sends the dust change to the user
+            Output::change(recipient_address, 0, base_asset_id),
+            // Add an additional output to store the stable part of the fee change.
+            Output::coin(faucet_address, 0, base_asset_id),
+        ];
 
-        let inputs = vec![Input::resource_signed(coin_type)];
+        let tip = guard.next_tip();
 
-        let outputs = wallet.get_asset_outputs_for_amount(
-            &address.into(),
-            config.dispense_asset_id,
-            config.dispense_amount,
-        );
-
-        let gas_price = guard.next_gas_price();
-
-        let mut script = ScriptTransactionBuilder::prepare_transfer(
+        let mut tx_builder = ScriptTransactionBuilder::prepare_transfer(
             inputs,
             outputs,
-            TxPolicies::default().with_gas_price(gas_price),
-            network_config.network_info.clone(),
+            TxPolicies::default().with_tip(tip),
         );
 
-        wallet.sign_transaction(&mut script);
+        wallet
+            .add_witnesses(&mut tx_builder)
+            .expect("Valid witness");
+        wallet
+            .adjust_for_fee(&mut tx_builder, config.dispense_amount)
+            .await
+            .map_err(|e| {
+                error(
+                    format!("Failed to adjust for fee: {e}"),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                )
+            })?;
 
-        let script = script.build(provider).await.expect("valid script");
+        let fee = tx_builder
+            .fee_checked_from_tx(provider)
+            .await
+            .map_err(|e| {
+                error(
+                    format!("Error calculating `TransactionFee`: {e}"),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                )
+            })?
+            .ok_or_else(|| {
+                error(
+                    "Overflow during calculating `TransactionFee`".to_string(),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                )
+            })?;
+        let available_balance = available_balance(&tx_builder.inputs, &base_asset_id);
+        let stable_fee_change = available_balance
+            .checked_sub(fee.max_fee().saturating_add(config.dispense_amount))
+            .ok_or_else(|| {
+                error(
+                    "Not enough asset to cover a max fee".to_string(),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                )
+            })?;
 
-        let total_fee = script
-            .fee_checked_from_tx(&network_config.network_info.consensus_parameters)
-            .expect("Should be able to calculate fee");
+        *tx_builder.outputs.last_mut().unwrap() =
+            Output::coin(faucet_address, stable_fee_change, base_asset_id);
 
-        tx_id = script.id(network_config.network_info.consensus_parameters.chain_id);
+        let script = tx_builder.build(provider).await.expect("Valid script");
+
+        let id = script.id(provider.chain_id());
         let result = tokio::time::timeout(
             Duration::from_secs(config.timeout),
             provider.send_transaction(script),
         )
         .await
-        .map(|r| {
+        .map_err(|_| {
+            error(
+                format!("Timeout while submitting transaction for address: {address:X}"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })
+        .and_then(|r| {
             r.map_err(|e| {
                 error(
-                    format!("Failed to submit transaction: {e}"),
+                    format!(
+                        "Failed to submit transaction for address: {address:X} with error: {}",
+                        e
+                    ),
                     StatusCode::INTERNAL_SERVER_ERROR,
                 )
             })
-        })
-        .map_err(|e| {
-            error(
-                format!("Timeout while submitting transaction: {e}"),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            )
         });
 
         match result {
-            Ok(Ok(_)) => {
+            Ok(_) => {
                 guard.last_output = Some(CoinOutput {
-                    utxo_id: UtxoId::new(tx_id, 1),
-                    owner: coin_output.owner,
-                    amount: coin_output.amount - total_fee.min_fee() - config.dispense_amount,
+                    utxo_id: UtxoId::new(id, 2),
+                    owner: faucet_address,
+                    amount: stable_fee_change,
                 });
+                tx_id = Some(id);
                 break;
             }
-            _ => {
+            Err(e) => {
+                tracing::warn!("{}", e);
                 guard.last_output = None;
             }
         };
     }
 
-    submit_tx_with_timeout(&client, &tx_id, config.timeout)
-        .await
-        .map_err(|e| {
-            cleanup();
-            e
-        })?;
+    let Some(tx_id) = tx_id else {
+        return Err(error(
+            "Failed to submit transaction".to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ));
+    };
+
+    submit_tx_with_timeout(&client, &tx_id, config.timeout).await?;
 
     info!(
         "dispensed {} tokens to {:#x}",
         config.dispense_amount, &address
     );
 
-    dispense_tracker.lock().unwrap().track(address);
+    let mut tracker = dispense_tracker.lock().unwrap();
+    tracker.track(address);
 
     Ok(DispenseResponse {
         status: "Success".to_string(),
         tokens: config.dispense_amount,
+        tx_id: tx_id.to_string(),
     })
 }
 
-#[tracing::instrument(skip(config))]
+#[tracing::instrument(skip_all)]
 pub async fn dispense_info(
     Extension(config): Extension<SharedConfig>,
+    Extension(wallet): Extension<SharedWallet>,
 ) -> Result<DispenseInfoResponse, DispenseError> {
+    let provider = wallet.provider().expect("client provider");
+    let base_asset_id = *provider.consensus_parameters().base_asset_id();
+
     Ok(DispenseInfoResponse {
         amount: config.dispense_amount,
-        asset_id: config.dispense_asset_id.to_string(),
+        asset_id: base_asset_id.to_string(),
     })
 }
 
 fn error(error: String, status: StatusCode) -> DispenseError {
     error!("{}", error);
     DispenseError { error, status }
+}
+
+fn available_balance(inputs: &[Input], base_asset_id: &AssetId) -> u64 {
+    inputs
+        .iter()
+        .filter_map(|input| match input {
+            Input::ResourceSigned { resource, .. } | Input::ResourcePredicate { resource, .. } => {
+                match resource {
+                    CoinType::Coin(Coin {
+                        amount, asset_id, ..
+                    }) if asset_id == base_asset_id => Some(*amount),
+                    CoinType::Message(message) => Some(message.amount),
+                    _ => None,
+                }
+            }
+            _ => None,
+        })
+        .sum()
 }

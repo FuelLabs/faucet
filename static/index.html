@@ -138,7 +138,20 @@
     color: #949494;
   }
 
-  .queued {
+  .provider-url a {
+    color: #949494;
+    text-decoration: underline;
+  }
+
+  .agreements {
+    text-align: left;
+    margin-top: 25px;
+    line-height: 1.4em;
+    color: #555;
+    font-size: 14px;
+  }
+
+  .queued, .redirect-container {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -174,6 +187,10 @@
 
   .hidden {
     display: none;
+  }
+  
+  .footer {
+    z-index: 9;
   }
 </style>
 
@@ -220,22 +237,38 @@
           <div>Waiting until more tokens are available</div>
         </div>
       </div>
+      <div id="agreements" class="agreements">
+        <input type="checkbox" id="agreement1" name="agreement1">
+        <label for="agreement1"> I acknowledge that this faucet is <u><b class="bold">only used for testing</b></u>.</label><br>
+        <input type="checkbox" id="agreement2" name="agreement2">
+        <label for="agreement2"> I acknowledge that there are <u><b class="bold">no incentives</b></u> to using this faucet.</label><br>
+        <input type="checkbox" id="agreement3" name="agreement3">
+        <label for="agreement3"> I agree not to spam this faucet, and know that I will be blocked if I do.</label><br>
+      </div>
       <div id="response-failure"></div>
-      <input type="submit" value="Give me Ether" class="button" />
+      <input type="submit" disabled="true" value="Give me Test Ether" class="button" />
     </form>
     <div id="response">
       <h2 class="response-title">Test Ether sent to the wallet</h2>
+      <div id="redirect-container" class="redirect-container hidden">
+        <div class="loader"></div>
+        <div id="redirect-text"></div>
+      </div>
       <a href="#" id="explorer-link" class="button">See on Fuel Explorer</a>
     </div>
   </div>
-  <div class="provider-url">Node url: {{ public_node_url }}</div>
+  <div class="footer">
+    <div class="provider-url">Node url: {{ public_node_url }}</div>
+    <div class="provider-url"><a target="_blank" href="https://github.com/FuelLabs/faucet">GitHub</a></div>
+  </div>
   <script>
     const faucetApp = (function () {
       let providerUrl = "{{ public_node_url }}";
-      let blockExplorer = "https://fuellabs.github.io/block-explorer-v2";
-      let query = new URLSearchParams(document.location.search);
+      let blockExplorer = "https://app.fuel.network";
+      let query = params = new URLSearchParams(document.location.search);
       let address = query.get('address');
-      let shouldRedirect = query.get('redirect') === 'true';
+      let redirectUrl = query.get('redirectUrl');
+      let buttonSubmit = form.querySelector("input[type=submit]");
 
       if (address) {
         let $address = document.getElementById('address');
@@ -244,16 +277,27 @@
         }
       }
 
+      let agreements = document.getElementById('agreements');
+      function hasAgreed() {
+        let inputs = agreements.getElementsByTagName('input');
+        let inputsList = Array.prototype.slice.call(inputs);
+        return inputsList.every(i => i.checked);
+      }
+
+      agreements.onchange = function() {
+        buttonSubmit.disabled = !hasAgreed();
+      };
+
       function hasCaptcha() {
         return !!document.getElementsByClassName("captcha-container")[0];
       }
 
-      function showWaiting() {
+      function showWaiting(text) {
         if (hasCaptcha()) {
           document.getElementsByClassName("captcha-container")[0].classList.add("hidden");
         }
         document.getElementsByClassName("queued")[0].classList.remove("hidden");
-        form.querySelector("input[type=submit]").disabled = true;
+        buttonSubmit.disabled = true;
       }
 
       function hideWaiting() {
@@ -261,7 +305,7 @@
           document.getElementsByClassName("captcha-container")[0].classList.remove("hidden");
         }
         document.getElementsByClassName("queued")[0].classList.add("hidden");
-        form.querySelector("input[type=submit]").disabled = false;
+        buttonSubmit.disabled = !hasAgreed();
       }
 
       function give_me_coins(form) {
@@ -291,15 +335,34 @@
       function handle_response(address) {
         return function (data) {
           if (!data.error) {
+            const tx_id  = `0x${data.tx_id}`;
+            const link = document.getElementById(
+              "explorer-link"
+            );
             document.getElementById("form").hidden = true;
             document.getElementById("response").style.display = "block";
-            document.getElementById(
-              "explorer-link"
-            ).href = `${blockExplorer}/address/${address}?providerUrl=${encodeURIComponent(
-              providerUrl
-            )}`;
-            if (shouldRedirect && document.referrer) {
-              location.href = document.referrer;
+            link.href = `${blockExplorer}/tx/${tx_id}`;
+            
+            if (redirectUrl) {
+              try {
+                const refUrl = new URL(decodeURIComponent(redirectUrl));
+                const redirectText = `Redirecting you back to ${refUrl.origin}...`;
+                
+                // Add tx_id to query params
+                refUrl.searchParams.set('tx_id', tx_id);
+
+                link.classList.add('hidden');
+                const $redirectContainer = document.getElementById('redirect-container');
+                const $redirectText = document.getElementById('redirect-text');
+                $redirectContainer.classList.remove('hidden');
+                $redirectText.innerText = redirectText;
+                setTimeout(() => {
+                  location.href = refUrl.toString();
+                }, 2000);
+              } catch (e) {
+                console.error(e);
+                // Do nothing if url is invalid
+              }
             }
           } else {
             document.getElementById("response-failure").innerText = data.error;

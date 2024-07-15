@@ -41,8 +41,8 @@ spec:
       containers:
         - name: {{ .Values.app.name }}
           image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
-          command: ["./fuel-faucet"]
-          resources: {}
+          command: [ "./fuel-faucet" ]
+          resources: { }
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           ports:
             - name: http
@@ -81,8 +81,4 @@ spec:
           {{- if .Values.app.dispense_amount }}
             - name: DISPENSE_AMOUNT
               value: "{{ .Values.app.dispense_amount }}"
-          {{- end }}
-          {{- if .Values.app.min_gas_price }}
-            - name: MIN_GAS_PRICE
-              value: "{{ .Values.app.min_gas_price }}"
           {{- end }}

@@ -1,5 +1,3 @@
-use fuels_core::types::AssetId;
-
 pub const LOG_FILTER: &str = "RUST_LOG";
 pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
 pub const CAPTCHA_KEY: &str = "CAPTCHA_KEY";
@@ -11,14 +9,14 @@ pub const WALLET_SECRET_DEV_KEY: &str =
 pub const FUEL_NODE_URL: &str = "FUEL_NODE_URL";
 pub const DEFAULT_NODE_URL: &str = "http://127.0.0.1:4000";
 pub const DISPENSE_AMOUNT: &str = "DISPENSE_AMOUNT";
+pub const NUMBER_OF_RETRIES: &str = "NUMBER_OF_RETRIES";
 pub const DISPENSE_INTERVAL: &str = "DISPENSE_LIMIT_INTERVAL";
 pub const DEFAULT_DISPENSE_INTERVAL: u64 = 24 * 60 * 60;
 pub const DEFAULT_FAUCET_DISPENSE_AMOUNT: u64 = 10_000_000;
-pub const FAUCET_ASSET_ID: AssetId = AssetId::new([0; 32]);
+pub const DEFAULT_NUMBER_OF_RETRIES: u64 = 5;
 pub const SERVICE_PORT: &str = "PORT";
 pub const DEFAULT_PORT: u16 = 3000;
 
-pub const MIN_GAS_PRICE: &str = "MIN_GAS_PRICE";
 pub const TIMEOUT_SECONDS: &str = "TIMEOUT_SECONDS";
 
 // HTTP config

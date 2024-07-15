@@ -33,11 +33,11 @@ cargo run
 
 ## Query Params
 
-When integrating the faucet you can use the following query params:
+When integrating the faucet you can use the following query params to enhance the user experience:
 
-| Name     | Type    | Description                                                                                |
-| -------- | ------- | ------------------------------------------------------------------------------------------ |
-| address  | Address | Auto-fill the address field using the provided value                                       |
-| redirect | Boolean | If true once the faucet is complete, the user will be redirected back to the referrer page |
+| Name        | Type    | Description                                                                                                                        |
+| ----------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| address     | Address | Auto-fill the address field using the provided value                                                                               |
+| redirectUrl | String  | If provided with a valid url, once the faucet is complete, the user will be redirected back to the url with tx_id as a query param |
 
-Ex.: `http://localhost:3000/?address=fuel134ddh9pfsspar086htdldwxq2jsr3yvqtj5w456kkrz3s653la5q347kmc&redirect=true`
+Ex.: `http://192.168.3.240:3003/?address=fuel134ddh9pfsspar086htdldwxq2jsr3yvqtj5w456kkrz3s653la5q347kmc&redirectUrl=http://localhost:4000`
