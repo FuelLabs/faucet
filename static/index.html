@@ -292,7 +292,7 @@
         return !!document.getElementsByClassName("captcha-container")[0];
       }
 
-      function showWaiting(text) {
+      function showWaiting() {
         if (hasCaptcha()) {
           document.getElementsByClassName("captcha-container")[0].classList.add("hidden");
         }
