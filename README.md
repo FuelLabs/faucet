@@ -40,4 +40,4 @@ When integrating the faucet you can use the following query params to enhance th
 | address     | Address | Auto-fill the address field using the provided value                                                                               |
 | redirectUrl | String  | If provided with a valid url, once the faucet is complete, the user will be redirected back to the url with tx_id as a query param |
 
-Ex.: `http://192.168.3.240:3003/?address=fuel134ddh9pfsspar086htdldwxq2jsr3yvqtj5w456kkrz3s653la5q347kmc&redirectUrl=http://localhost:4000`
+Ex.: `http://localhost:3000/?address=fuel134ddh9pfsspar086htdldwxq2jsr3yvqtj5w456kkrz3s653la5q347kmc&redirectUrl=http://localhost:4000`
