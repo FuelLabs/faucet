@@ -39,5 +39,10 @@ When integrating the faucet you can use the following query params to enhance th
 | ----------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | address     | Address | Auto-fill the address field using the provided value                                                                               |
 | redirectUrl | String  | If provided with a valid url, once the faucet is complete, the user will be redirected back to the url with tx_id as a query param |
+| autoClose   | String  | If provided empty or true will close automatically the window after the transaction is finished                                    |
 
-Ex.: `http://localhost:3000/?address=fuel134ddh9pfsspar086htdldwxq2jsr3yvqtj5w456kkrz3s653la5q347kmc&redirectUrl=http://localhost:4000`
+### Example - Redirect
+- `http://localhost:3000/?address=fuel134ddh9pfsspar086htdldwxq2jsr3yvqtj5w456kkrz3s653la5q347kmc&redirectUrl=http://localhost:4000`
+
+### Example - Auto Close
+- `http://localhost:3000/?address=fuel134ddh9pfsspar086htdldwxq2jsr3yvqtj5w456kkrz3s653la5q347kmc&autoClose`

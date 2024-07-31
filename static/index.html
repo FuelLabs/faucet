@@ -268,7 +268,9 @@
       let query = params = new URLSearchParams(document.location.search);
       let address = query.get('address');
       let redirectUrl = query.get('redirectUrl');
+      let autoClose = query.get('autoClose');
       let buttonSubmit = form.querySelector("input[type=submit]");
+      let shouldAutoClose = (autoClose === "" || autoClose === "true");
 
       if (address) {
         let $address = document.getElementById('address');
@@ -342,6 +344,10 @@
             document.getElementById("form").hidden = true;
             document.getElementById("response").style.display = "block";
             link.href = `${blockExplorer}/tx/${tx_id}`;
+
+            if (shouldAutoClose) {
+              window.close();
+            }
             
             if (redirectUrl) {
               try {
