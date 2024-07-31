@@ -24,7 +24,6 @@ use serde_json::json;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use std::usize;
 
 #[derive(Debug, Clone)]
 struct MockClock {
