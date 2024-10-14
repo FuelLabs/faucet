@@ -150,7 +150,7 @@ async fn get_coins(
     amount: u64,
 ) -> Result<Vec<Input>, DispenseError> {
     wallet
-        .get_spendable_resources(*base_asset_id, amount)
+        .get_spendable_resources(*base_asset_id, amount, None)
         .await
         .map_err(|e| {
             error(
@@ -307,24 +307,17 @@ pub async fn dispense_tokens(
                 )
             })?;
 
-        let fee = tx_builder
-            .fee_checked_from_tx(provider)
-            .await
-            .map_err(|e| {
+        let max_fee = tx_builder.estimate_max_fee(provider).await.map_err(
+            |e| {
                 error(
                     format!("Error calculating `TransactionFee`: {e}"),
                     StatusCode::INTERNAL_SERVER_ERROR,
                 )
-            })?
-            .ok_or_else(|| {
-                error(
-                    "Overflow during calculating `TransactionFee`".to_string(),
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                )
-            })?;
+            },
+        )?;
         let available_balance = available_balance(&tx_builder.inputs, &base_asset_id);
         let stable_fee_change = available_balance
-            .checked_sub(fee.max_fee().saturating_add(config.dispense_amount))
+            .checked_sub(max_fee.saturating_add(config.dispense_amount))
             .ok_or_else(|| {
                 error(
                     "Not enough asset to cover a max fee".to_string(),
