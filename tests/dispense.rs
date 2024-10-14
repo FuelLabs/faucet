@@ -94,16 +94,15 @@ impl TestContext {
 
         let snapshot_reader = SnapshotReader::new_in_memory(chain_config, state_config);
 
-        let mut config = NodeConfig {
+        let config = NodeConfig {
             block_production: Trigger::Interval {
                 block_time: Duration::from_secs(3),
             },
             utxo_validation: true,
-            static_gas_price: 20,
+            starting_gas_price: 20,
             snapshot_reader,
             ..NodeConfig::local_node()
         };
-        config.txpool.max_depth = 32;
 
         // start node
         let fuel_node = FuelService::new_node(config).await.unwrap();
@@ -273,7 +272,7 @@ async fn many_concurrent_requests() {
         .provider
         .get_transactions(PaginationRequest {
             cursor: None,
-            results: 500,
+            results: 200,
             direction: PageDirection::Forward,
         })
         .await
