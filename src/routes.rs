@@ -307,14 +307,12 @@ pub async fn dispense_tokens(
                 )
             })?;
 
-        let max_fee = tx_builder.estimate_max_fee(provider).await.map_err(
-            |e| {
-                error(
-                    format!("Error calculating `TransactionFee`: {e}"),
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                )
-            },
-        )?;
+        let max_fee = tx_builder.estimate_max_fee(provider).await.map_err(|e| {
+            error(
+                format!("Error calculating `TransactionFee`: {e}"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?;
         let available_balance = available_balance(&tx_builder.inputs, &base_asset_id);
         let stable_fee_change = available_balance
             .checked_sub(max_fee.saturating_add(config.dispense_amount))
