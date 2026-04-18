@@ -10,6 +10,8 @@ RUN apt-get update && \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+RUN cargo install cargo-chef --locked
+
 FROM chef as planner
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 COPY . .
