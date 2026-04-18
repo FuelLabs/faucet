@@ -1,14 +1,14 @@
 use crate::{
-    models::*, recaptcha, CoinOutput, SharedConfig, SharedDispenseTracker, SharedFaucetState,
-    SharedWallet,
+    CoinOutput, SharedConfig, SharedDispenseTracker, SharedFaucetState, SharedWallet, models::*,
+    recaptcha,
 };
 use axum::{
-    response::{Html, IntoResponse, Response},
     Extension, Json,
+    response::{Html, IntoResponse, Response},
 };
 
-use fuel_core_client::client::types::NodeInfo;
 use fuel_core_client::client::FuelClient;
+use fuel_core_client::client::types::NodeInfo;
 use fuel_tx::{Output, UtxoId};
 use fuel_types::{Address, AssetId, Bytes32};
 use fuels_accounts::wallet::Wallet;
@@ -259,7 +259,7 @@ pub async fn dispense_tokens(
                 amount: previous_coin_output.amount,
                 asset_id: base_asset_id,
                 utxo_id: previous_coin_output.utxo_id,
-                owner: previous_coin_output.owner.into(),
+                owner: previous_coin_output.owner,
             });
 
             vec![Input::resource_signed(coin_type)]
@@ -274,7 +274,7 @@ pub async fn dispense_tokens(
         };
 
         let recipient_address = address;
-        let faucet_address: Address = wallet.address().into();
+        let faucet_address: Address = wallet.address();
         let outputs = vec![
             Output::coin(
                 recipient_address,

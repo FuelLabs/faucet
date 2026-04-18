@@ -6,18 +6,18 @@ use crate::{
 };
 use anyhow::anyhow;
 use axum::{
+    BoxError, Extension, Json, Router,
     error_handling::HandleErrorLayer,
-    http::{header::CACHE_CONTROL, HeaderValue, StatusCode},
+    http::{HeaderValue, StatusCode, header::CACHE_CONTROL},
     response::IntoResponse,
     routing::{get, post},
-    BoxError, Extension, Json, Router,
 };
 use fuel_core_client::client::FuelClient;
 use fuel_tx::UtxoId;
 use fuel_types::Address;
 use fuels_accounts::signers::private_key::PrivateKeySigner;
 use fuels_accounts::wallet::Wallet;
-use fuels_accounts::{provider::Provider, ViewOnlyAccount};
+use fuels_accounts::{ViewOnlyAccount, provider::Provider};
 use fuels_core::types::node_info::NodeInfo;
 use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
@@ -125,7 +125,7 @@ pub async fn start_server(
         .into_iter()
         .map(|coin| coin.amount)
         .sum::<u64>();
-    info!("Faucet Account: {:#x}", Address::from(wallet.address()));
+    info!("Faucet Account: {:#x}", wallet.address());
     info!("Faucet Balance: {}", balance);
 
     // setup routes
