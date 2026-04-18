@@ -1,4 +1,4 @@
-use fuel_faucet::{config::Config, start_server, StdTime};
+use fuel_faucet::{StdTime, config::Config, start_server};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
