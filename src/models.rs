@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DispenseInfoResponse {
-    pub amount: u64,
+    pub amount: u128,
     pub asset_id: String,
 }
 
@@ -18,7 +18,7 @@ pub struct DispenseInput {
 #[derive(Serialize, Debug)]
 pub struct DispenseResponse {
     pub status: String,
-    pub tokens: u64,
+    pub tokens: u128,
     pub tx_id: String,
 }
 

@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM lukemathwalker/cargo-chef:latest-rust-1.81 as chef
+FROM --platform=$BUILDPLATFORM rust:1.93.0-bookworm AS chef
 WORKDIR /build/
 # hadolint ignore=DL3008
 RUN apt-get update && \
