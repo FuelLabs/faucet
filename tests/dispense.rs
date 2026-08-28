@@ -185,12 +185,8 @@ async fn dispense_sends_coins_to_valid_address_non_hex() {
     let mut rng = StdRng::seed_from_u64(42);
     let recipient_address: Address = rng.r#gen();
 
-    _dispense_sends_coins_to_valid_address(
-        rng,
-        recipient_address,
-        format!("{}", &recipient_address),
-    )
-    .await
+    _dispense_sends_coins_to_valid_address(rng, recipient_address, format!("{}", recipient_address))
+        .await
 }
 
 async fn _dispense_sends_coins_to_valid_address(
@@ -299,7 +295,7 @@ async fn many_concurrent_requests() {
 async fn dispense_once_per_day() {
     let mut rng = StdRng::seed_from_u64(42);
     let recipient_address: Address = rng.r#gen();
-    let recipient_address_str = format!("{}", &recipient_address);
+    let recipient_address_str = format!("{}", recipient_address);
     let context = TestContext::new(&mut rng).await;
     let addr = context.addr;
 
