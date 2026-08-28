@@ -249,6 +249,19 @@ pub async fn dispense_tokens(
     })?;
     let base_asset_id = *consensus_parameters.base_asset_id();
 
+    // The dispensed amount is tracked as `u128` because the SDK's coin selection and
+    // fee arithmetic are `u128`, but a coin output is still `u64`. Convert once, and
+    // fail loudly instead of silently truncating a misconfigured `DISPENSE_AMOUNT`.
+    let dispense_amount = u64::try_from(config.dispense_amount).map_err(|_| {
+        error(
+            format!(
+                "`DISPENSE_AMOUNT` {} is too large for a coin output",
+                config.dispense_amount
+            ),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )
+    })?;
+
     let mut tx_id = None;
     for _ in 0..config.number_of_retries {
         let mut guard = state.lock().await;
@@ -276,11 +289,7 @@ pub async fn dispense_tokens(
         let recipient_address = address;
         let faucet_address: Address = wallet.address();
         let outputs = vec![
-            Output::coin(
-                recipient_address,
-                config.dispense_amount as u64,
-                base_asset_id,
-            ),
+            Output::coin(recipient_address, dispense_amount, base_asset_id),
             // Sends the dust change to the user
             Output::change(recipient_address, 0, base_asset_id),
             // Add an additional output to store the stable part of the fee change.
@@ -324,8 +333,18 @@ pub async fn dispense_tokens(
                 )
             })?;
 
+        // The faucet chains the next dispense on this output, so its amount has to be
+        // exactly representable as a coin amount; a truncating cast here would make the
+        // next transaction claim an input value the chain does not have.
+        let stable_fee_change = u64::try_from(stable_fee_change).map_err(|_| {
+            error(
+                format!("The stable fee change {stable_fee_change} is too large for a coin output"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?;
+
         *tx_builder.outputs.last_mut().unwrap() =
-            Output::coin(faucet_address, stable_fee_change as u64, base_asset_id);
+            Output::coin(faucet_address, stable_fee_change, base_asset_id);
 
         let script = tx_builder.build(provider).await.expect("Valid script");
 
@@ -358,7 +377,7 @@ pub async fn dispense_tokens(
                 guard.last_output = Some(CoinOutput {
                     utxo_id: UtxoId::new(id, 2),
                     owner: faucet_address,
-                    amount: stable_fee_change as u64,
+                    amount: stable_fee_change,
                 });
                 tx_id = Some(id);
                 break;
