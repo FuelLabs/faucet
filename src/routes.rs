@@ -1,24 +1,21 @@
 use crate::{
-    models::*, recaptcha, CoinOutput, SharedConfig, SharedDispenseTracker, SharedFaucetState,
-    SharedWallet,
+    CoinOutput, SharedConfig, SharedDispenseTracker, SharedFaucetState, SharedWallet, models::*,
+    recaptcha,
 };
 use axum::{
-    response::{Html, IntoResponse, Response},
     Extension, Json,
+    response::{Html, IntoResponse, Response},
 };
 
-use fuel_core_client::client::types::NodeInfo;
 use fuel_core_client::client::FuelClient;
+use fuel_core_client::client::types::NodeInfo;
 use fuel_tx::{Output, UtxoId};
 use fuel_types::{Address, AssetId, Bytes32};
-use fuels_accounts::{wallet::WalletUnlocked, Account, ViewOnlyAccount};
+use fuels_accounts::wallet::Wallet;
+use fuels_accounts::{Account, ViewOnlyAccount};
 use fuels_core::types::transaction::{Transaction, TxPolicies};
 use fuels_core::types::transaction_builders::{BuildableTransaction, TransactionBuilder};
-use fuels_core::types::{
-    bech32::Bech32Address,
-    coin::{Coin, CoinStatus},
-    coin_type::CoinType,
-};
+use fuels_core::types::{coin::Coin, coin_type::CoinType};
 use fuels_core::types::{input::Input, transaction_builders::ScriptTransactionBuilder};
 use handlebars::Handlebars;
 use reqwest::StatusCode;
@@ -65,12 +62,7 @@ pub async fn main(Extension(config): Extension<SharedConfig>) -> Html<String> {
 #[tracing::instrument(skip_all)]
 pub async fn health(Extension(wallet): Extension<SharedWallet>) -> Response {
     // ping client for health
-    let client = wallet
-        .provider()
-        .expect("client provider")
-        .healthy()
-        .await
-        .unwrap_or(false);
+    let client = wallet.provider().healthy().await.unwrap_or(false);
 
     let time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -145,9 +137,9 @@ fn check_and_mark_dispense_limit(
 }
 
 async fn get_coins(
-    wallet: &WalletUnlocked,
+    wallet: &Wallet,
     base_asset_id: &AssetId,
-    amount: u64,
+    amount: u128,
 ) -> Result<Vec<Input>, DispenseError> {
     wallet
         .get_spendable_resources(*base_asset_id, amount, None)
@@ -158,7 +150,7 @@ async fn get_coins(
                 StatusCode::INTERNAL_SERVER_ERROR,
             )
         })
-        .map(|resources| resources.into_iter().map(Input::resource_signed).collect())
+        .map(|coins| coins.into_iter().map(Input::resource_signed).collect())
 }
 
 async fn submit_tx_with_timeout(
@@ -202,8 +194,6 @@ pub async fn dispense_tokens(
     // parse deposit address
     let address = if let Ok(address) = Address::from_str(input.address.as_str()) {
         Ok(address)
-    } else if let Ok(address) = Bech32Address::from_str(input.address.as_str()) {
-        Ok(address.into())
     } else {
         return Err(error(
             "invalid address".to_string(),
@@ -247,22 +237,42 @@ pub async fn dispense_tokens(
             .remove_in_progress(&address);
     });
 
-    let provider = wallet.provider().expect("client provider");
-    let base_asset_id = *provider.consensus_parameters().base_asset_id();
+    let provider = wallet.provider();
+    let consensus_parameters = provider.consensus_parameters().await.map_err(|_| {
+        error(
+            format!(
+                "Unable to fetch consensus parameters from provider at {}",
+                provider.url()
+            ),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )
+    })?;
+    let base_asset_id = *consensus_parameters.base_asset_id();
+
+    // The dispensed amount is tracked as `u128` because the SDK's coin selection and
+    // fee arithmetic are `u128`, but a coin output is still `u64`. Convert once, and
+    // fail loudly instead of silently truncating a misconfigured `DISPENSE_AMOUNT`.
+    let dispense_amount = u64::try_from(config.dispense_amount).map_err(|_| {
+        error(
+            format!(
+                "`DISPENSE_AMOUNT` {} is too large for a coin output",
+                config.dispense_amount
+            ),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )
+    })?;
 
     let mut tx_id = None;
     for _ in 0..config.number_of_retries {
         let mut guard = state.lock().await;
         let amount = guard.last_output.as_ref().map_or(0, |o| o.amount);
-        let inputs = if amount > config.dispense_amount {
+        let inputs = if amount as u128 > config.dispense_amount {
             let previous_coin_output = guard.last_output.expect("Checked above");
             let coin_type = CoinType::Coin(Coin {
                 amount: previous_coin_output.amount,
-                block_created: 0u32,
                 asset_id: base_asset_id,
                 utxo_id: previous_coin_output.utxo_id,
-                owner: previous_coin_output.owner.into(),
-                status: CoinStatus::Unspent,
+                owner: previous_coin_output.owner,
             });
 
             vec![Input::resource_signed(coin_type)]
@@ -271,15 +281,15 @@ pub async fn dispense_tokens(
                 &wallet,
                 &base_asset_id,
                 // Double the target amount to cover also the fee
-                config.dispense_amount * info_node.max_depth * 2,
+                config.dispense_amount * info_node.max_depth as u128 * 2,
             )
             .await?
         };
 
         let recipient_address = address;
-        let faucet_address: Address = wallet.address().into();
+        let faucet_address: Address = wallet.address();
         let outputs = vec![
-            Output::coin(recipient_address, config.dispense_amount, base_asset_id),
+            Output::coin(recipient_address, dispense_amount, base_asset_id),
             // Sends the dust change to the user
             Output::change(recipient_address, 0, base_asset_id),
             // Add an additional output to store the stable part of the fee change.
@@ -312,7 +322,7 @@ pub async fn dispense_tokens(
                 format!("Error calculating `TransactionFee`: {e}"),
                 StatusCode::INTERNAL_SERVER_ERROR,
             )
-        })?;
+        })? as u128;
         let available_balance = available_balance(&tx_builder.inputs, &base_asset_id);
         let stable_fee_change = available_balance
             .checked_sub(max_fee.saturating_add(config.dispense_amount))
@@ -323,12 +333,22 @@ pub async fn dispense_tokens(
                 )
             })?;
 
+        // The faucet chains the next dispense on this output, so its amount has to be
+        // exactly representable as a coin amount; a truncating cast here would make the
+        // next transaction claim an input value the chain does not have.
+        let stable_fee_change = u64::try_from(stable_fee_change).map_err(|_| {
+            error(
+                format!("The stable fee change {stable_fee_change} is too large for a coin output"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?;
+
         *tx_builder.outputs.last_mut().unwrap() =
             Output::coin(faucet_address, stable_fee_change, base_asset_id);
 
         let script = tx_builder.build(provider).await.expect("Valid script");
 
-        let id = script.id(provider.chain_id());
+        let id = script.id(consensus_parameters.chain_id());
         let result = tokio::time::timeout(
             Duration::from_secs(config.timeout),
             provider.send_transaction(script),
@@ -398,8 +418,20 @@ pub async fn dispense_info(
     Extension(config): Extension<SharedConfig>,
     Extension(wallet): Extension<SharedWallet>,
 ) -> Result<DispenseInfoResponse, DispenseError> {
-    let provider = wallet.provider().expect("client provider");
-    let base_asset_id = *provider.consensus_parameters().base_asset_id();
+    let provider = wallet.provider();
+    let base_asset_id = *provider
+        .consensus_parameters()
+        .await
+        .map_err(|_| {
+            error(
+                format!(
+                    "Unable to fetch consensus parameters from provider at {}",
+                    provider.url()
+                ),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?
+        .base_asset_id();
 
     Ok(DispenseInfoResponse {
         amount: config.dispense_amount,
@@ -412,7 +444,7 @@ fn error(error: String, status: StatusCode) -> DispenseError {
     DispenseError { error, status }
 }
 
-fn available_balance(inputs: &[Input], base_asset_id: &AssetId) -> u64 {
+fn available_balance(inputs: &[Input], base_asset_id: &AssetId) -> u128 {
     inputs
         .iter()
         .filter_map(|input| match input {
@@ -420,8 +452,8 @@ fn available_balance(inputs: &[Input], base_asset_id: &AssetId) -> u64 {
                 match resource {
                     CoinType::Coin(Coin {
                         amount, asset_id, ..
-                    }) if asset_id == base_asset_id => Some(*amount),
-                    CoinType::Message(message) => Some(message.amount),
+                    }) if asset_id == base_asset_id => Some((*amount) as u128),
+                    CoinType::Message(message) => Some(message.amount as u128),
                     _ => None,
                 }
             }

@@ -1,22 +1,20 @@
-use fuel_core::chain_config::{
-    ChainConfig, CoinConfig, CoinConfigGenerator, SnapshotReader, StateConfig,
-};
-use fuel_core::service::config::Trigger;
+use fuel_core::chain_config::{ChainConfig, CoinConfig, SnapshotReader, StateConfig};
+use fuel_core::service::config::{GasPriceConfig, Trigger};
 use fuel_core::service::{Config as NodeConfig, FuelService};
+use fuel_core_chain_config::coin_config_helpers::CoinConfigGenerator;
 
+use fuel_core_chain_config::Owner;
 use fuel_core_client::client::pagination::{PageDirection, PaginationRequest};
 use fuel_crypto::SecretKey;
 use fuel_faucet::config::Config;
 use fuel_faucet::models::DispenseInfoResponse;
-use fuel_faucet::{start_server, Clock};
+use fuel_faucet::{Clock, start_server};
 use fuel_tx::ConsensusParameters;
 use fuel_types::Address;
 use fuels_accounts::provider::Provider;
-use fuels_accounts::wallet::WalletUnlocked;
-use fuels_core::types::bech32::Bech32Address;
 use fuels_core::types::transaction::TransactionType;
-use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use secrecy::Secret;
@@ -56,18 +54,18 @@ struct TestContext {
     addr: SocketAddr,
     clock: MockClock,
 }
+
 impl TestContext {
     async fn new(rng: &mut StdRng) -> Self {
-        let dispense_amount = 2000000;
+        let dispense_amount = 2000000u128;
         let secret_key: SecretKey = SecretKey::random(rng);
-        let wallet = WalletUnlocked::new_from_private_key(secret_key, None);
         let base_asset_id = [1; 32].into();
 
         let mut generator = CoinConfigGenerator::new();
         let coins: Vec<_> = (0..10000)
             .map(|_| CoinConfig {
-                owner: wallet.address().into(),
-                amount: dispense_amount - 1,
+                owner: Owner::SecretKey(secret_key),
+                amount: dispense_amount as u64 - 1,
                 asset_id: base_asset_id,
                 ..generator.generate()
             })
@@ -94,15 +92,20 @@ impl TestContext {
 
         let snapshot_reader = SnapshotReader::new_in_memory(chain_config, state_config);
 
-        let config = NodeConfig {
+        let mut config = NodeConfig {
             block_production: Trigger::Interval {
                 block_time: Duration::from_secs(3),
             },
             utxo_validation: true,
-            starting_gas_price: 20,
+            gas_price_config: GasPriceConfig {
+                starting_exec_gas_price: 20,
+                ..GasPriceConfig::local_node()
+            },
+            historical_execution: false,
             snapshot_reader,
             ..NodeConfig::local_node()
         };
+        config.graphql_config.max_queries_complexity = 1000000000;
 
         // start node
         let fuel_node = FuelService::new_node(config).await.unwrap();
@@ -157,6 +160,8 @@ async fn can_start_server() {
         context
             .provider
             .consensus_parameters()
+            .await
+            .unwrap()
             .base_asset_id()
             .to_string()
     );
@@ -165,11 +170,11 @@ async fn can_start_server() {
 #[tokio::test]
 async fn dispense_sends_coins_to_valid_address_hex_address() {
     let mut rng = StdRng::seed_from_u64(42);
-    let recipient_address: Address = rng.gen();
+    let recipient_address: Address = rng.r#gen();
 
     _dispense_sends_coins_to_valid_address(
         rng,
-        recipient_address.into(),
+        recipient_address,
         format!("{:#x}", &recipient_address),
     )
     .await
@@ -178,19 +183,15 @@ async fn dispense_sends_coins_to_valid_address_hex_address() {
 #[tokio::test]
 async fn dispense_sends_coins_to_valid_address_non_hex() {
     let mut rng = StdRng::seed_from_u64(42);
-    let recipient_address: Address = rng.gen();
+    let recipient_address: Address = rng.r#gen();
 
-    _dispense_sends_coins_to_valid_address(
-        rng,
-        recipient_address.into(),
-        format!("{}", &recipient_address),
-    )
-    .await
+    _dispense_sends_coins_to_valid_address(rng, recipient_address, format!("{}", recipient_address))
+        .await
 }
 
 async fn _dispense_sends_coins_to_valid_address(
     mut rng: StdRng,
-    recipient_address: Bech32Address,
+    recipient_address: Address,
     recipient_address_str: String,
 ) {
     let context = TestContext::new(&mut rng).await;
@@ -211,7 +212,12 @@ async fn _dispense_sends_coins_to_valid_address(
         .provider
         .get_coins(
             &recipient_address,
-            *context.provider.consensus_parameters().base_asset_id(),
+            *context
+                .provider
+                .consensus_parameters()
+                .await
+                .unwrap()
+                .base_asset_id(),
         )
         .await
         .unwrap()
@@ -219,12 +225,12 @@ async fn _dispense_sends_coins_to_valid_address(
         .map(|coin| coin.amount)
         .sum();
 
-    assert!(test_balance >= context.faucet_config.dispense_amount);
+    assert!(test_balance as u128 >= context.faucet_config.dispense_amount);
 }
 
 fn generate_recipient_addresses(count: usize, rng: &mut StdRng) -> Vec<String> {
     let recipient_addresses: Vec<Address> =
-        std::iter::repeat_with(|| rng.gen()).take(count).collect();
+        std::iter::repeat_with(|| rng.r#gen()).take(count).collect();
     recipient_addresses
         .iter()
         .map(|addr| format!("{}", addr))
@@ -288,8 +294,8 @@ async fn many_concurrent_requests() {
 #[tokio::test]
 async fn dispense_once_per_day() {
     let mut rng = StdRng::seed_from_u64(42);
-    let recipient_address: Address = rng.gen();
-    let recipient_address_str = format!("{}", &recipient_address);
+    let recipient_address: Address = rng.r#gen();
+    let recipient_address_str = format!("{}", recipient_address);
     let context = TestContext::new(&mut rng).await;
     let addr = context.addr;
 

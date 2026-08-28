@@ -17,7 +17,7 @@ pub struct Config {
     pub node_url: String,
     pub public_node_url: String,
     pub wallet_secret_key: Option<Secret<String>>,
-    pub dispense_amount: u64,
+    pub dispense_amount: u128,
     pub number_of_retries: u64,
     pub dispense_limit_interval: u64,
     pub timeout: u64,
@@ -41,7 +41,7 @@ impl Default for Config {
                 .map(|s| Secret::new(s.into_string().unwrap())),
             dispense_amount: env::var(DISPENSE_AMOUNT)
                 .unwrap_or_else(|_| DEFAULT_FAUCET_DISPENSE_AMOUNT.to_string())
-                .parse::<u64>()
+                .parse::<u128>()
                 .expect("expected a valid integer for DISPENSE_AMOUNT"),
             number_of_retries: env::var(NUMBER_OF_RETRIES)
                 .unwrap_or_else(|_| DEFAULT_NUMBER_OF_RETRIES.to_string())

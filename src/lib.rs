@@ -6,16 +6,18 @@ use crate::{
 };
 use anyhow::anyhow;
 use axum::{
+    BoxError, Extension, Json, Router,
     error_handling::HandleErrorLayer,
-    http::{header::CACHE_CONTROL, HeaderValue, StatusCode},
+    http::{HeaderValue, StatusCode, header::CACHE_CONTROL},
     response::IntoResponse,
     routing::{get, post},
-    BoxError, Extension, Json, Router,
 };
 use fuel_core_client::client::FuelClient;
 use fuel_tx::UtxoId;
 use fuel_types::Address;
-use fuels_accounts::{provider::Provider, wallet::WalletUnlocked, ViewOnlyAccount};
+use fuels_accounts::signers::private_key::PrivateKeySigner;
+use fuels_accounts::wallet::Wallet;
+use fuels_accounts::{ViewOnlyAccount, provider::Provider};
 use fuels_core::types::node_info::NodeInfo;
 use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
@@ -78,7 +80,7 @@ impl FaucetState {
 }
 
 pub type SharedFaucetState = Arc<tokio::sync::Mutex<FaucetState>>;
-pub type SharedWallet = Arc<WalletUnlocked>;
+pub type SharedWallet = Arc<Wallet>;
 pub type SharedConfig = Arc<Config>;
 pub type SharedDispenseTracker = Arc<Mutex<DispenseTracker>>;
 
@@ -96,32 +98,34 @@ pub async fn start_server(
     let provider = Provider::connect(service_config.node_url.clone())
         .await
         .expect("Should create a provider");
-    let base_asset_id = *provider.consensus_parameters().base_asset_id();
+
+    let base_asset_id = *provider
+        .consensus_parameters()
+        .await
+        .expect("Failed to get consensus parameters")
+        .base_asset_id();
 
     // setup wallet
     let secret = service_config
         .wallet_secret_key
         .clone()
         .unwrap_or_else(|| Secret::new(WALLET_SECRET_DEV_KEY.to_string()));
-    let wallet = WalletUnlocked::new_from_private_key(
+    let private_key = PrivateKeySigner::new(
         secret
             .expose_secret()
             .parse()
             .expect("Unable to load secret key"),
-        Some(provider),
     );
+    let wallet = Wallet::new(private_key, provider);
 
     let balance = wallet
         .get_coins(base_asset_id)
         .await
         .expect("Failed to fetch initial balance from fuel core")
         .into_iter()
-        .filter_map(|coin| match coin.status {
-            fuels_core::types::coin::CoinStatus::Unspent => Some(coin.amount),
-            _ => None,
-        })
+        .map(|coin| coin.amount)
         .sum::<u64>();
-    info!("Faucet Account: {:#x}", Address::from(wallet.address()));
+    info!("Faucet Account: {:#x}", wallet.address());
     info!("Faucet Balance: {}", balance);
 
     // setup routes

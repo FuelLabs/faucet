@@ -34,6 +34,6 @@ pub async fn verify(
     match (recaptcha_response.success, recaptcha_response.error_codes) {
         (true, _) => Ok(()),
         (false, Some(errors)) => Err(anyhow!(format!("{errors:?}"))),
-        (false, _) => Err(anyhow!(format!("unknown error"))),
+        (false, _) => Err(anyhow!("unknown error")),
     }
 }

@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM lukemathwalker/cargo-chef:latest-rust-1.81 as chef
+FROM rust:1.93.0-bookworm AS chef
 WORKDIR /build/
 # hadolint ignore=DL3008
 RUN apt-get update && \
@@ -9,6 +9,8 @@ RUN apt-get update && \
     libclang-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+RUN cargo install cargo-chef --locked
 
 FROM chef as planner
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
